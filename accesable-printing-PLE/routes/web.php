@@ -1,18 +1,16 @@
 <?php
 
-use App\Http\Controllers\ProfileController;
-use App\Http\Controllers\RequestController;
-use App\Http\Controllers\CatalogController;
-use App\Http\Controllers\LandingspageController;
-use App\Http\Controllers\PortfolioController;
-use App\Http\Controllers\PrinterController;
-use App\Http\Controllers\PaymentController;
-use Illuminate\Support\Facades\Route;
-use Illuminate\Support\Facades\Auth;
+use App\Http\Controllers\{ProfileController, RequestController, CatalogController, LandingspageController, PortfolioController, PrinterController, PaymentController};
+use Illuminate\Support\Facades\{Route, Auth};
 
 // --- Publieke Routes ---
 Route::get('/', [LandingspageController::class, 'index'])->name('welcome');
 Route::get('/completed-prints', [PortfolioController::class, 'index'])->name('showcase.index');
+Route::view('/info', 'onepage')->name('onepage');
+
+// Stripe Webhook Afhandeling
+Route::post('/stripe/webhook', [PaymentController::class, 'handleWebhook']);
+Route::any('/stripe/webhook', fn() => redirect()->route('welcome'));
 
 Route::get('/home', function () {
     if (!Auth::check()) return redirect()->route('welcome');
@@ -26,47 +24,33 @@ Route::get('/catalogus/selection', [CatalogController::class, 'selection'])->nam
 Route::get('/catalogus/remove/{id}', [CatalogController::class, 'removeFromSelection'])->name('catalog.remove');
 Route::get('/catalogus/clear', [CatalogController::class, 'clearSelection'])->name('catalog.clear');
 
-// --- Stripe Webhook & Feedback (Publiek/Klant toegankelijk) ---
-Route::post('/stripe/webhook', [PaymentController::class, 'handleWebhook']);
-Route::get('/payment-success/{id}', [PaymentController::class, 'paymentSuccess'])->name('payment.success');
-Route::get('/payment-cancel/{id}', [PaymentController::class, 'paymentCancel'])->name('payment.cancel');
-
-// --- Geauthenticeerde Routes ---
+// --- Geauthenticeerde Routes (Klant) ---
 Route::middleware('auth')->group(function () {
-    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
-    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
-    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+    Route::get('/dashboard', fn() => Auth::user()->isPrinter() ? redirect()->route('printer.dashboard') : view('dashboard'))->name('dashboard');
 
-    Route::get('/dashboard', function () {
-        return Auth::user()->isPrinter() ? redirect()->route('printer.dashboard') : view('dashboard');
-    })->name('dashboard');
+    // Betalingsafhandeling
+    Route::get('/payment-success/{id}', [PaymentController::class, 'paymentSuccess'])->name('payment.success');
+    Route::get('/payment-cancel/{id}', [PaymentController::class, 'paymentCancel'])->name('payment.cancel');
+    Route::post('/order/{id}/approve', [PaymentController::class, 'approveDelivery'])->name('order.approve');
+    Route::post('/order/{id}/cancel', [PaymentController::class, 'customerCancel'])->name('order.cancel');
+    Route::post('/order/{id}/dispute', [PaymentController::class, 'customerDispute'])->name('order.dispute');
 });
 
 // --- Klant Specifieke Routes ---
 Route::middleware(['auth', 'customer'])->group(function () {
     Route::get('/requests/create', [RequestController::class, 'create'])->name('requests.create');
     Route::post('/requests', [RequestController::class, 'store'])->name('requests.store');
-
     Route::get('/catalogus/checkout', [CatalogController::class, 'checkout'])->name('catalog.checkout');
     Route::post('/catalogus/process', [CatalogController::class, 'processCheckout'])->name('catalog.process');
-
-    Route::get('/catalogus/beheer/toevoegen', [CatalogController::class, 'create'])->name('catalog.create');
-    Route::post('/catalogus/beheer/toevoegen', [CatalogController::class, 'store'])->name('catalog.store');
-
-    // --- TOEGEVOEGD: De route die de klant naar de Stripe Checkout URL stuurt ---
     Route::get('/payment/checkout/{id}', [PaymentController::class, 'checkout'])->name('payment.checkout');
 });
 
-// --- Printer (Admin) Specifieke Routes ---
+// --- Printer (Admin) ---
 Route::middleware(['auth', 'printer'])->group(function () {
     Route::get('/printer/dashboard', [PrinterController::class, 'index'])->name('printer.dashboard');
-    Route::get('/printer/download-zip/{id}', [PrinterController::class, 'downloadZip'])->name('printer.download-zip');
-
-    // STRIPE: De actie voor de admin om de sessie aan te maken en de mail te sturen
-    Route::get('/printer/send-payment/{id}', [PaymentController::class, 'sendPaymentRequest'])->name('admin.send_payment');
+    Route::post('/admin/dispute/{id}/approve', [PaymentController::class, 'adminApproveDispute'])->name('admin.dispute.approve');
+    Route::post('/admin/dispute/{id}/reject', [PaymentController::class, 'adminRejectDispute'])->name('admin.dispute.reject');
+    Route::post('/printer/request/{id}/update-status', [PrinterController::class, 'updateStatus'])->name('printer.update-status');
 });
-
-//onepager route
-Route::view('/info', 'onepage')->name('onepage');
 
 require __DIR__.'/auth.php';

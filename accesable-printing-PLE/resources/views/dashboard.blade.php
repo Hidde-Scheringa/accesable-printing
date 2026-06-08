@@ -53,7 +53,7 @@
                         <ul class="mp-link-list">
                             <li class="mp-link-item active">Alle aanvragen ({{ Auth::user()->requests->count() }})</li>
                             <li class="mp-link-item text-muted">Wacht op betaling ({{ Auth::user()->requests->where('payment_status', 'pending')->count() }})</li>
-                            <li class="mp-link-item text-muted">In productie ({{ Auth::user()->requests->where('payment_status', 'paid')->count() }})</li>
+                            <li class="mp-link-item text-muted">In productie ({{ Auth::user()->requests->where('payment_status', 'escrow')->count() }})</li>
                         </ul>
                     </div>
                 </div>
@@ -65,11 +65,17 @@
                         <i class="fa-solid fa-check-circle"></i> {{ session('success') }}
                     </div>
                 @endif
+                @if(session('error'))
+                    <div style="background: #fde8e8; color: #9b1c1c; padding: 15px; border-radius: 4px; margin-bottom: 20px; border: 1px solid #f8b4b4; font-size: 14px; font-weight: bold;">
+                        <i class="fa-solid fa-circle-exclamation"></i> {{ session('error') }}
+                    </div>
+                @endif
 
                 <div class="mp-list-stack">
                     @forelse(Auth::user()->requests()->orderBy('created_at', 'desc')->get() as $request)
                         @php
                             $files = is_array($request->stl_files) ? $request->stl_files : json_decode($request->stl_files, true);
+                            $currentStatus = strtolower($request->status ?? 'pending');
                         @endphp
                         <article class="mp-item-card">
                             <div class="mp-item-visual-container">
@@ -158,15 +164,27 @@
                                     {{-- DYNAMISCHE BETALING STATUS TAGS --}}
                                     @if($request->payment_status === 'paid')
                                         <span class="mp-tag" style="background: #dcfce7; color: #166534; border-color: #bbf7d0;">
-                                            <i class="fa-solid fa-check-double"></i> BETAALD
+                                            <i class="fa-solid fa-circle-check"></i> GEVERIFIEERD & AFGEROND
+                                        </span>
+                                    @elseif($request->payment_status === 'escrow')
+                                        <span class="mp-tag" style="background: #fef3c7; color: #92400e; border-color: #fde68a;">
+                                            <i class="fa-solid fa-shield-halved"></i> PLATFORM BEHEER (VEILIG)
                                         </span>
                                     @elseif($request->payment_status === 'pending')
-                                        <span class="mp-tag" style="background: #fef3c7; color: #92400e; border-color: #fde68a;">
+                                        <span class="mp-tag" style="background: #fee2e2; color: #991b1b; border-color: #fca5a5;">
                                             <i class="fa-solid fa-clock"></i> WACHT OP BETALING
                                         </span>
-                                    @else
-                                        <span class="mp-tag mp-tag-status">{{ $request->status ?? 'In behandeling' }}</span>
+                                    @elseif($request->payment_status === 'disputed')
+                                        <span class="mp-tag" style="background: #fff7ed; color: #c2410c; border-color: #fed7aa;">
+                                            <i class="fa-solid fa-triangle-exclamation"></i> CLAIM INGEDIEND
+                                        </span>
+                                    @elseif($request->payment_status === 'cancelled')
+                                        <span class="mp-tag" style="background: #f3f4f6; color: #374151; border-color: #e5e7eb;">
+                                            <i class="fa-solid fa-ban"></i> GEANNULEERD
+                                        </span>
                                     @endif
+
+                                    <span class="mp-tag mp-tag-status">Productie: {{ strtoupper($request->status ?? 'In behandeling') }}</span>
                                 </div>
 
                                 <div class="mp-item-footer" style="display: flex; justify-content: space-between; align-items: flex-end;">
@@ -186,14 +204,100 @@
                                         @endforeach
                                     </div>
 
-                                    {{-- STRIPE BETAALKNOP VOOR KLANT --}}
-                                    @if($request->payment_status === 'pending')
-                                        <div class="mp-payment-action" style="margin-bottom: -5px;">
-                                            <a href="{{ route('payment.checkout', $request->id) }}" class="mp-btn-action" style="background: var(--mp-gold); color: #2d2a26; padding: 10px 15px;">
-                                                <i class="fa-solid fa-credit-card"></i> Nu Betalen
-                                            </a>
-                                        </div>
-                                    @endif
+                                    {{-- DYNAMISCHE ACTIEKNOPPEN OP BASIS VAN STATUS --}}
+                                    <div class="mp-payment-action" style="margin-bottom: -5px;">
+                                        @if($request->payment_status === 'cancelled')
+                                            <span style="font-size: 12px; color: #64748b; font-weight: bold; font-style: italic;">
+                                                <i class="fa-solid fa-ban"></i> Deze order is geannuleerd
+                                            </span>
+                                        @elseif($request->payment_status === 'disputed')
+                                            <div style="background: #fff7ed; border-left: 3px solid #f97316; padding: 8px 12px; border-radius: 0 4px 4px 0; max-width: 320px;">
+                                                <p style="font-size: 11px; color: #c2410c; text-align: left; margin: 0; line-height: 1.4;">
+                                                    <i class="fa-solid fa-circle-info"></i> Je schadeclaim is ingediend. De admin beoordeelt de foto en verwerkt de terugbetaling.
+                                                </p>
+                                            </div>
+                                        @elseif($request->payment_status === 'pending')
+                                            <div style="display: flex; align-items: center; gap: 10px;">
+                                                <form action="{{ route('order.cancel', $request->id) }}" method="POST" onsubmit="return confirm('Weet je zeker dat je dit printverzoek wilt annuleren?');">
+                                                    @csrf
+                                                    <button type="submit" class="mp-btn-secondary" style="border-color: #ef4444; color: #ef4444; padding: 11px 15px; font-size: 12px;">
+                                                        Annuleren
+                                                    </button>
+                                                </form>
+                                                <a href="{{ route('payment.checkout', $request->id) }}" class="mp-btn-action" style="background: var(--mp-gold); color: #2d2a26; padding: 10px 15px;">
+                                                    <i class="fa-solid fa-credit-card"></i> Nu Betalen
+                                                </a>
+                                            </div>
+                                        @elseif($request->payment_status === 'escrow')
+                                            @if($currentStatus === 'pending' || $currentStatus === 'in_production')
+                                                <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 10px;">
+                                                    <div style="background: #fdfbf7; border-left: 3px solid var(--mp-gold); padding: 8px 12px; border-radius: 0 4px 4px 0; max-width: 320px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 5px;">
+                                                        <p style="font-size: 11px; color: var(--mp-text-muted); text-align: left; margin: 0; line-height: 1.4;">
+                                                            <i class="fa-solid fa-info-circle" style="color: var(--mp-gold); margin-right: 4px;"></i>
+                                                            Je betaling staat veilig geparkeerd. De expert bereidt de productie voor.
+                                                        </p>
+                                                    </div>
+                                                    <form action="{{ route('order.cancel', $request->id) }}" method="POST" onsubmit="return confirm('Weet je zeker dat je dit printverzoek wilt annuleren? Je geld in escrow wordt teruggestort.');">
+                                                        @csrf
+                                                        <button type="submit" class="mp-btn-secondary" style="border-color: #ef4444; color: #ef4444; padding: 10px 15px; font-size: 12px;">
+                                                            <i class="fa-solid fa-ban"></i> Order Annuleren
+                                                        </button>
+                                                    </form>
+                                                </div>
+                                            @elseif($currentStatus === 'printing')
+                                                <div style="background: #eff6ff; border-left: 3px solid #1d4ed8; padding: 8px 12px; border-radius: 0 4px 4px 0; max-width: 320px;">
+                                                    <p style="font-size: 11px; color: #1e40af; text-align: left; margin: 0; line-height: 1.4;">
+                                                        <i class="fa-solid fa-gears fa-spin"></i> De printers draaien op dit moment! Je kunt deze order niet meer annuleren.
+                                                    </p>
+                                                </div>
+                                            @elseif($currentStatus === 'shipped')
+                                                <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 10px;">
+                                                    <div style="background: #fdfbf7; border-left: 3px solid var(--mp-gold); padding: 8px 12px; border-radius: 0 4px 4px 0; max-width: 320px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                                                        <p style="font-size: 11px; color: var(--mp-text-muted); text-align: left; margin: 0; line-height: 1.4;">
+                                                            <i class="fa-solid fa-info-circle" style="color: var(--mp-gold); margin-right: 4px;"></i>
+                                                            Het pakket is verzonden! Bevestig de ontvangst en geef het geld vrij of dien een schadeclaim in als er onderdelen defect zijn geraakt.
+                                                        </p>
+                                                    </div>
+
+                                                    <div style="display: flex; gap: 8px;">
+                                                        <button type="button" class="mp-btn-secondary" style="border-color: #f97316; color: #f97316; padding: 10px 15px; font-size: 12px;" onclick="document.getElementById('dispute-form-{{ $request->id }}').style.display = 'block'; this.style.display = 'none';">
+                                                            <i class="fa-solid fa-triangle-exclamation"></i> Defect Melden
+                                                        </button>
+
+                                                        <form action="{{ route('order.approve', $request->id) }}" method="POST" onsubmit="return confirm('Weet je zeker dat je de miniatures in goede orde hebt ontvangen? Dit sluit de bestelling officieel af.');">
+                                                            @csrf
+                                                            <button type="submit" class="mp-btn-action" style="background: #2e7d32; color: #ffffff; padding: 10px 15px; border: none; cursor: pointer; font-weight: 700;">
+                                                                <i class="fa-solid fa-check-double"></i> Order goedkeuren
+                                                            </button>
+                                                        </form>
+                                                    </div>
+
+                                                    {{-- INLINE DISPUTE FORMULIER --}}
+                                                    <div id="dispute-form-{{ $request->id }}" style="display: none; margin-top: 10px; width: 100%; max-width: 350px; background: #fff; border: 1px solid var(--mp-border); padding: 15px; border-radius: 4px; text-align: left; box-shadow: var(--mp-shadow);">
+                                                        <form action="{{ route('order.dispute', $request->id) }}" method="POST" enctype="multipart/form-data">
+                                                            @csrf
+                                                            <div style="margin-bottom: 10px;">
+                                                                <label style="display: block; font-size: 11px; font-weight: bold; margin-bottom: 4px;">Reden van defect / claim:</label>
+                                                                <textarea name="defect_reason" required style="width: 100%; min-height: 60px; padding: 6px; font-size: 12px; border: 1px solid var(--mp-border); border-radius: 2px;" placeholder="Bijv: Afgebroken arm tijdens transport..."></textarea>
+                                                            </div>
+                                                            <div style="margin-bottom: 12px;">
+                                                                <label style="display: block; font-size: 11px; font-weight: bold; margin-bottom: 4px;">Foto van de schade:</label>
+                                                                <input type="file" name="defect_image" accept="image/*" required style="font-size: 11px;">
+                                                            </div>
+                                                            <div style="display: flex; gap: 5px;">
+                                                                <button type="submit" class="mp-btn-action" style="background: var(--mp-accent); padding: 8px 12px; font-size: 11px;">Claim Indienen</button>
+                                                                <button type="button" class="mp-btn-secondary" style="padding: 8px 12px; font-size: 11px;" onclick="this.parentElement.parentElement.parentElement.style.display='none';">Annuleren</button>
+                                                            </div>
+                                                        </form>
+                                                    </div>
+                                                </div>
+                                            @endif
+                                        @elseif($request->payment_status === 'paid')
+                                            <span style="font-size: 12px; color: var(--mp-text-muted); font-weight: bold; font-style: italic;">
+                                                <i class="fa-solid fa-circle-check" style="color: #2e7d32;"></i> Succesvol ontvangen & afgerond
+                                            </span>
+                                        @endif
+                                    </div>
                                 </div>
                             </div>
                         </article>

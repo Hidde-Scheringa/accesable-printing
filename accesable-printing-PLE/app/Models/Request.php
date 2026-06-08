@@ -12,8 +12,6 @@ class Request extends Model
 
     /**
      * De attributen die massaal toewijsbaar zijn (Mass Assignment).
-     * Zorg ervoor dat 'stripe_checkout_id' en 'payment_status' hierin staan,
-     * anders kan de PaymentController de database niet bijwerken.
      */
     protected $fillable = [
         'user_id',
@@ -29,18 +27,22 @@ class Request extends Model
         'streetnumber',
         'zipcode',
         'status',
-        'stripe_checkout_id', // Voor het koppelen van de Stripe Sessie
-        'payment_status',      // Voor de status: unpaid, pending, paid
+        'stripe_checkout_id',
+        'payment_status',
+
+        // --- NIEUW: Deze stonden er nog niet in! ---
+        'defect_reason',       // Zorgt dat de reden mag worden opgeslagen
+        'defect_image_path',   // Zorgt dat het fotopad mag worden opgeslagen
     ];
 
     /**
      * De attributen die moeten worden omgezet naar specifieke types.
      */
     protected $casts = [
-        'stl_files' => 'array',         // Zorgt dat de JSON in de DB een PHP array wordt
+        'stl_files' => 'array',
         'scale' => 'integer',
         'streetnumber' => 'integer',
-        'total_price' => 'decimal:2',   // Zorgt voor 2 decimalen (bijv. 19.50)
+        'total_price' => 'decimal:2',
     ];
 
     /**

@@ -58,13 +58,18 @@
             </div>
             <div class="stat-card" style="border-left-color: #166534;">
                 <h4>Betaald (Te Printen)</h4>
-                <p>{{ $allRequests->where('payment_status', 'paid')->count() }}</p>
+                <p>{{ $allRequests->where('payment_status', 'escrow')->count() + $allRequests->where('payment_status', 'paid')->count() }}</p>
             </div>
         </div>
 
         @if(session('success'))
             <div style="background: #dcfce7; color: #166534; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #bbf7d0; font-weight: bold;">
                 <i class="fa-solid fa-circle-check"></i> {{ session('success') }}
+            </div>
+        @endif
+        @if(session('error'))
+            <div style="background: #fde8e8; color: #9b1c1c; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #f8b4b4; font-weight: bold;">
+                <i class="fa-solid fa-circle-exclamation"></i> {{ session('error') }}
             </div>
         @endif
 
@@ -75,18 +80,18 @@
                     <th>Inspectie (Modellen)</th>
                     <th>Klant & Volledig Adres</th>
                     <th>Project & Afmetingen</th>
-                    <th>Specificaties & Betaling</th>
-                    <th>Downloads</th>
+                    <th>Specificaties & Financiën</th>
+                    <th>Productie Status Acties</th>
                 </tr>
                 </thead>
                 <tbody>
                 @forelse($allRequests as $request)
-                    <tr>
+                    @php
+                        $files = is_string($request->stl_files) ? json_decode($request->stl_files, true) : $request->stl_files;
+                        $currentStatus = strtolower($request->status ?? 'pending');
+                    @endphp
+                    <tr style="@if($request->payment_status === 'disputed') background-color: #fffaf0; @endif">
                         <td style="width: 140px;">
-                            @php
-                                $files = is_string($request->stl_files) ? json_decode($request->stl_files, true) : $request->stl_files;
-                            @endphp
-
                             @if(is_array($files) && count($files) > 0)
                                 <div class="preview-btn-stack" style="display: flex; flex-direction: column; gap: 5px;">
                                     @foreach($files as $index => $file)
@@ -100,6 +105,18 @@
                                 </div>
                             @else
                                 <span class="no-files">Geen modellen</span>
+                            @endif
+
+                            @if($request->stl_files)
+                                <div class="mp-download-container" style="display: flex; flex-direction: column; gap: 4px; margin-top: 15px;">
+                                    <small style="color: #999; font-weight: bold; font-size: 9px; text-transform: uppercase;">Downloads:</small>
+                                    @foreach($files as $index => $file)
+                                        @php $displayName = $file['original_name'] ?? $file['title'] ?? 'Model ' . ($index + 1); @endphp
+                                        <a href="{{ asset('storage/' . $file['path']) }}" class="mp-btn-download-styled" download="{{ $displayName }}">
+                                            <span class="icon">↓</span> {{ \Illuminate\Support\Str::limit($displayName, 12) }}
+                                        </a>
+                                    @endforeach
+                                </div>
                             @endif
                         </td>
                         <td>
@@ -120,6 +137,7 @@
                         </td>
                         <td>
                             <strong>{{ $request->title }}</strong>
+                            <p style="font-size: 12px; color: #666; margin: 4px 0 10px 0;">{{ $request->description }}</p>
 
                             <div class="model-dimensions-info" style="margin-top: 10px; background: #fcfaf7; padding: 8px; border-radius: 4px; border: 1px solid #f0efeb;">
                                 <small style="display:block; color: var(--p-gold); font-weight: bold; font-size: 9px; text-transform: uppercase; margin-bottom: 5px;">Geconfigureerde Formaten & Aantallen:</small>
@@ -173,22 +191,29 @@
                             </span>
                             <span class="tag tag-color">{{ $request->color }}</span>
 
-                            {{-- PAYMENT STATUS SECTION --}}
                             <div style="margin-top: 15px; padding-top: 10px; border-top: 1px dashed #ddd;">
-                                <small style="color: #999; display: block; font-size: 10px; font-weight: bold; text-transform: uppercase;">Status & Prijs:</small>
+                                <small style="color: #999; display: block; font-size: 10px; font-weight: bold; text-transform: uppercase;">Betaalstatus & Prijs:</small>
 
                                 <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 5px;">
                                     @if($request->payment_status === 'paid')
                                         <span class="tag" style="background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; margin:0;">
-                                            <i class="fa-solid fa-check-circle"></i> BETAALD
+                                            <i class="fa-solid fa-circle-check"></i> VOLTOOID
+                                        </span>
+                                    @elseif($request->payment_status === 'escrow')
+                                        <span class="tag" style="background: #fef3c7; color: #92400e; border: 1px solid #fde68a; margin:0;">
+                                            <i class="fa-solid fa-shield-halved"></i> ESCROW VAST
                                         </span>
                                     @elseif($request->payment_status === 'pending')
-                                        <span class="tag" style="background: #fef3c7; color: #92400e; border: 1px solid #fde68a; margin:0;">
+                                        <span class="tag" style="background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; margin:0;">
                                             <i class="fa-solid fa-clock"></i> AFWACHTING
                                         </span>
-                                    @else
+                                    @elseif($request->payment_status === 'disputed')
+                                        <span class="tag" style="background: #ffedd5; color: #c2410c; border: 1px solid #fed7aa; margin:0;">
+                                            <i class="fa-solid fa-triangle-exclamation"></i> DISPUTE / CLAIM
+                                        </span>
+                                    @elseif($request->payment_status === 'cancelled')
                                         <span class="tag" style="background: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; margin:0;">
-                                            <i class="fa-solid fa-circle-minus"></i> ONBETAALD
+                                            <i class="fa-solid fa-ban"></i> GEANNULEERD
                                         </span>
                                     @endif
 
@@ -197,30 +222,83 @@
                                     </strong>
                                 </div>
 
-                                {{-- ACTIE INFORMATIE MET DE BETREKKING TOT PRODUCTIE --}}
-                                <div style="margin-top: 8px;">
-                                    @if($request->payment_status === 'paid')
-                                        <div style="font-size: 10px; color: #166534; font-weight: bold; text-align: center; background: #f0fdf4; padding: 6px; border-radius: 2px; border: 1px solid #bbf7d0;">
-                                            <i class="fa-solid fa-print"></i> KLAAR VOOR PRODUCTIE
+                                {{-- COMPONENT: BIJ DEFECT/DISPUTE DE REDEN EN FOTO INLINE TONEN --}}
+                                @if($request->payment_status === 'disputed')
+                                    <div style="margin-top: 10px; background: #fff5f5; border: 1px solid #fecaca; padding: 10px; border-radius: 4px;">
+                                        <strong style="font-size: 11px; color: #991b1b; display: block; text-transform: uppercase;">⚠️ Klant meldt defect:</strong>
+                                        <p style="font-size: 12px; margin: 5px 0; color: #333; line-height: 1.4;">
+                                            "{{ $request->defect_reason ?? 'Geen reden opgegeven' }}"
+                                        </p>
+                                        @if($request->defect_image_path)
+                                            <a href="{{ asset('storage/' . $request->defect_image_path) }}" target="_blank" style="display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--p-accent); font-weight: bold; text-decoration: underline; margin-bottom: 10px;">
+                                                <i class="fa-solid fa-image"></i> Bekijk schadefoto
+                                            </a>
+                                        @endif
+
+                                        {{-- ACTIEKNOPPEN VOOR ADMIN --}}
+                                        <div style="display: flex; gap: 5px; margin-top: 5px;">
+                                            <form action="{{ route('admin.dispute.approve', $request->id) }}" method="POST" onsubmit="return confirm('Weet je het zeker? Het geld wordt nu teruggestort naar de klant.');">
+                                                @csrf
+                                                <button type="submit" style="background: #ef4444; color: white; border: none; padding: 5px 8px; font-size: 10px; border-radius: 3px; cursor: pointer; font-weight: bold;">
+                                                    GELD TERUGSTORTEN
+                                                </button>
+                                            </form>
+
+                                            <form action="{{ route('admin.dispute.reject', $request->id) }}" method="POST">
+                                                @csrf
+                                                <button type="submit" style="background: #3b82f6; color: white; border: none; padding: 5px 8px; font-size: 10px; border-radius: 3px; cursor: pointer; font-weight: bold;">
+                                                    CLAIM AFWIJZEN
+                                                </button>
+                                            </form>
                                         </div>
-                                    @else
-                                        <div style="font-size: 10px; color: #92400e; font-weight: bold; text-align: center; background: #fffbeb; padding: 6px; border-radius: 2px; border: 1px solid #fde68a;">
-                                            <i class="fa-solid fa-hourglass-start"></i> WACHT OP STRIPE AFRONDING
-                                        </div>
-                                    @endif
-                                </div>
+                                    </div>
+                                @endif
                             </div>
                         </td>
                         <td>
-                            @if($request->stl_files)
-                                <div class="mp-download-container" style="display: flex; flex-direction: column; gap: 4px;">
-                                    @foreach($files as $index => $file)
-                                        @php $displayName = $file['original_name'] ?? $file['title'] ?? 'Model ' . ($index + 1); @endphp
-                                        <a href="{{ asset('storage/' . $file['path']) }}" class="mp-btn-download-styled" download="{{ $displayName }}">
-                                            <span class="icon">↓</span> {{ \Illuminate\Support\Str::limit($displayName, 12) }}
-                                        </a>
-                                    @endforeach
+                            {{-- HUIDIGE STATUS DISPLAY --}}
+                            <div style="margin-bottom: 12px;">
+                                <small style="color: #999; display: block; font-size: 10px; font-weight: bold; text-transform: uppercase; margin-bottom: 4px;">Huidige status:</small>
+                                <span class="status-badge status-{{ $currentStatus }}">
+                                    {{ strtoupper($request->status ?? 'pending') }}
+                                </span>
+                            </div>
+
+                            {{-- INTERACTIEVE STATUS KNOPPEN OP BASIS VAN WORKFLOW --}}
+                            @if($request->payment_status === 'cancelled')
+                                <div style="font-size: 12px; color: #666; font-style: italic; padding: 5px 0;">
+                                    <i class="fa-solid fa-ban"></i> Order is geannuleerd
                                 </div>
+                            @elseif($request->payment_status === 'paid')
+                                <div style="font-size: 12px; color: #166534; font-weight: bold;">
+                                    <i class="fa-solid fa-circle-check"></i> Volledig afgerond & uitbetaald.
+                                </div>
+                            @else
+                                <div class="status-action-box" style="background: #f9f9f9; padding: 10px; border: 1px solid #e5e5e5; border-radius: 4px; display: flex; flex-direction: column; gap: 8px;">
+                                    <form action="{{ route('printer.update-status', $request->id) }}" method="POST">
+                                        @csrf
+                                        <input type="hidden" name="status" value="printing">
+                                        <button type="submit" class="admin-btn btn-printing @if($currentStatus === 'printing') active-status @endif"
+                                                @if($currentStatus === 'printing' || $currentStatus === 'ready' || $currentStatus === 'shipped') disabled @endif>
+                                            <i class="fa-solid fa-hammer"></i> 1. Start Printing
+                                        </button>
+                                    </form>
+
+                                    <form action="{{ route('printer.update-status', $request->id) }}" method="POST">
+                                        @csrf
+                                        <input type="hidden" name="status" value="shipped">
+                                        <button type="submit" class="admin-btn btn-shipped @if($currentStatus === 'shipped') active-status @endif"
+                                                @if($currentStatus === 'shipped' || $request->payment_status === 'pending') disabled @endif>
+                                            <i class="fa-solid fa-truck-fast"></i> 2. Mark Shipped
+                                        </button>
+                                    </form>
+                                </div>
+
+                                @if($request->payment_status === 'pending')
+                                    <small style="color: #b91c1c; font-size: 10px; display: block; margin-top: 5px; line-height: 1.3;">
+                                        * Wacht op betaling van de klant voordat je kunt verzenden.
+                                    </small>
+                                @endif
                             @endif
                         </td>
                     </tr>
@@ -288,23 +366,32 @@
     .mini-preview-btn i { font-size: 14px; color: var(--p-gold); }
     .mini-preview-btn span { font-size: 11px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-    /* Tags & Buttons */
+    /* Tags & Badges */
     .tag { padding: 4px 10px; border-radius: 3px; font-size: 10px; font-weight: 800; text-transform: uppercase; margin-right: 5px; }
     .tag-resin { background: #e0f2fe; color: #0369a1; }
     .tag-fdm { background: #fef3c7; color: #92400e; }
     .tag-color { background: #f3f4f6; color: #374151; }
-    .mp-btn-download-styled { background: #f8f7f2; border: 1px solid var(--p-border); padding: 5px 10px; font-size: 10px; color: black; text-decoration: none; font-weight: bold; border-radius: 2px; text-align: center; }
+    .mp-btn-download-styled { display: block; background: #f8f7f2; border: 1px solid var(--p-border); padding: 5px 10px; font-size: 10px; color: black; text-decoration: none; font-weight: bold; border-radius: 2px; text-align: center; }
     .mp-btn-download-styled:hover { border-color: var(--p-gold); background: #fff; }
 
+    /* STATUS BADGES */
+    .status-badge { display: inline-block; padding: 3px 8px; font-size: 11px; font-weight: bold; border-radius: 4px; border: 1px solid transparent; }
+    .status-pending { background: #f3f4f6; color: #4b5563; border-color: #d1d5db; }
+    .status-printing { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
+    .status-ready { background: #faf5ff; color: #6b21a8; border-color: #e9d5ff; }
+    .status-shipped { background: #f0fdf4; color: #166534; border-color: #bbf7d0; }
+    .status-cancelled { background: #fef2f2; color: #991b1b; border-color: #fca5a5; }
+
+    /* DYNAMISCHE ADMIN ACTIEKNOPPEN */
+    .admin-btn { width: 100%; border: 1px solid #ddd; padding: 8px 12px; font-size: 12px; font-weight: 700; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: 0.2s; background: white; }
+    .btn-printing:hover:not(:disabled) { border-color: #1d4ed8; color: #1d4ed8; background: #f8fafc; }
+    .btn-shipped:hover:not(:disabled) { border-color: #166534; color: #166534; background: #f0fdf4; }
+    .admin-btn:disabled { background: #f5f5f5; color: #bbb; cursor: not-allowed; border-color: #e5e5e5; }
+    .active-status { background: #2d2a26 !important; color: #ffffff !important; border-color: #2d2a26 !important; box-shadow: inset 0 2px 4px rgba(0,0,0,0.15); }
+
     /* MODAL VOOR 3D */
-    .modal-overlay {
-        display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(0,0,0,0.8); z-index: 10000; align-items: center; justify-content: center;
-    }
-    .modal-wrapper {
-        background: white; width: 85%; height: 85vh; border-radius: 12px;
-        overflow: hidden; display: flex; flex-direction: column; position: relative; box-shadow: 0 20px 50px rgba(0,0,0,0.3);
-    }
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 10000; align-items: center; justify-content: center; }
+    .modal-wrapper { background: white; width: 85%; height: 85vh; border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; position: relative; box-shadow: 0 20px 50px rgba(0,0,0,0.3); }
     .modal-header { padding: 20px 30px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
     .close-modal-btn { background: none; border: none; font-size: 35px; cursor: pointer; color: #bbb; line-height: 1; }
     .close-modal-btn:hover { color: var(--p-accent); }
