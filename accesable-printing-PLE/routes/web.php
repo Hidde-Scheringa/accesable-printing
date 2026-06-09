@@ -1,6 +1,6 @@
 <?php
 
-use App\Http\Controllers\{ProfileController, RequestController, CatalogController, LandingspageController, PortfolioController, PrinterController, PaymentController};
+use App\Http\Controllers\{RequestController, CatalogController, LandingspageController, PortfolioController, PrinterController, PaymentController};
 use Illuminate\Support\Facades\{Route, Auth};
 
 // --- Publieke Routes ---
@@ -18,7 +18,7 @@ Route::get('/home', function () {
 })->name('home');
 
 // --- Catalogus Basis ---
-Route::get('/catalogus', [CatalogController::class, 'index'])->name('catalog.index');
+Route::get('/catalog', [CatalogController::class, 'index'])->name('catalog.index');
 Route::post('/catalogus/add/{id}', [CatalogController::class, 'addToSelection'])->name('catalog.add');
 Route::get('/catalogus/selection', [CatalogController::class, 'selection'])->name('catalog.selection');
 Route::get('/catalogus/remove/{id}', [CatalogController::class, 'removeFromSelection'])->name('catalog.remove');

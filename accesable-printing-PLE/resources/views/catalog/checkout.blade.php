@@ -67,8 +67,7 @@
                             <h3 class="mp-section-title">3. Product Specificaties</h3>
                             @foreach($items as $item)
                                 @php
-                                    $selection = session('print_selection', []);
-                                    $qty = $selection[$item->id]['qty'] ?? ($selection[$item->id]['quantity'] ?? 1);
+                                    $qty = $selection[$item->id]['quantity'] ?? 1;
                                 @endphp
                                 <div class="mp-item-config-block">
                                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
@@ -119,45 +118,18 @@
                     <h3 class="mp-summary-title">Overzicht</h3>
 
                     <div class="mp-summary-list">
-                        @php $grandTotal = 0; @endphp
                         @foreach($items as $item)
                             @php
-                                $selection = session('print_selection', []);
-                                $qty = $selection[$item->id]['qty'] ?? ($selection[$item->id]['quantity'] ?? 1);
-                                $itemPrice = $item->price * $qty;
-                                $grandTotal += $itemPrice;
-
-                                $stlData = is_array($item->stl_files) ? $item->stl_files : json_decode($item->stl_files, true);
-                                $maxX = 0; $maxY = 0; $maxZ = 0;
-                                if($stlData) {
-                                    foreach($stlData as $file) {
-                                        $maxX = max($maxX, $file['x'] ?? 0);
-                                        $maxY = max($maxY, $file['y'] ?? 0);
-                                        $maxZ = max($maxZ, $file['z'] ?? 0);
-                                    }
-                                }
+                                $qty = $selection[$item->id]['quantity'] ?? 1;
                             @endphp
                             <div class="mp-summary-item-wrapper"
                                  id="summary-item-{{ $item->id }}"
-                                 data-unit-price="{{ $item->price }}"
-                                 data-base-x="{{ $maxX }}"
-                                 data-base-y="{{ $maxY }}"
-                                 data-base-z="{{ $maxZ }}"
+                                 data-base-volume="{{ $item->total_volume_mm3 ?? 0 }}"
                                  data-qty="{{ $qty }}">
 
                                 <div class="mp-item-header">
                                     <span class="item-name"><strong>{{ $qty }}x</strong> {{ $item->title }}</span>
-                                    <span class="item-price" id="price-display-{{ $item->id }}">
-                                        € {{ number_format($itemPrice, 2, ',', '.') }}
-                                    </span>
-                                </div>
-
-                                <div class="mp-item-dimensions">
-                                    <span class="dim-values">
-                                        <span class="val-x">{{ round($maxX) }}</span> x
-                                        <span class="val-y">{{ round($maxY) }}</span> x
-                                        <span class="val-z">{{ round($maxZ) }}</span> mm
-                                    </span>
+                                    <span class="item-price" id="price-display-{{ $item->id }}">€ 0,00</span>
                                 </div>
                             </div>
                             <hr class="mp-divider">
@@ -166,8 +138,7 @@
 
                     <div id="free-shipping-container" style="margin-top: 10px; margin-bottom: 20px;">
                         <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; text-transform: uppercase; margin-bottom: 6px;">
-                            <span id="free-shipping-text" style="color: #706a64;">Nog € 24,00 tot gratis verzending</span>
-                            <span style="color: var(--mp-gold);">Gratis vanaf € 24,-</span>
+                            <span id="free-shipping-text" style="color: #706a64;">Verzendkosten</span>
                         </div>
                         <div style="background: #e5e7eb; height: 6px; border-radius: 3px; overflow: hidden;">
                             <div id="free-shipping-progress" style="background: var(--mp-gold); height: 100%; width: 0%; transition: width 0.3s;"></div>
@@ -185,7 +156,7 @@
 
                     <div class="mp-summary-total">
                         <span>Totaal:</span>
-                        <span id="checkout-total-display">€ {{ number_format($grandTotal, 2, ',', '.') }}</span>
+                        <span id="checkout-total-display">€ 0,00</span>
                     </div>
                 </div>
             </aside>
@@ -215,7 +186,6 @@
     .mp-summary-card { background: #fff; padding: 25px; border-radius: 4px; border-top: 5px solid var(--mp-gold); position: sticky; top: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
     .mp-summary-title { font-size: 16px; text-transform: uppercase; font-weight: 800; margin-bottom: 20px; border-bottom: 1px solid var(--mp-border); padding-bottom: 10px; }
     .mp-item-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 5px; font-size: 14px; }
-    .mp-item-dimensions { font-size: 12px; color: #706a64; }
     .mp-divider { border: 0; border-top: 1px solid #eee; margin: 15px 0; }
     .mp-summary-total { display: flex; justify-content: space-between; font-weight: 800; font-size: 22px; color: var(--mp-accent); margin-top: 20px; padding-top: 15px; border-top: 2px solid var(--mp-border); }
     .mp-btn-submit { background: var(--mp-accent); color: #fff; border: none; padding: 18px; width: 100%; font-weight: 800; text-transform: uppercase; cursor: pointer; border-radius: 3px; margin-top: 20px; transition: 0.2s; }
@@ -227,14 +197,15 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+        const GRAM_PRICE = 0.01;
+        const PLA_DENSITY = 0.00124;
+        const INFILL_FACTOR = 0.30;
+        const PROFIT_MULT = 1.60;
+        const SHIPPING_THRESHOLD = 24.00;
+
         const scaleSelectors = document.querySelectorAll('.mp-scale-item-selector');
-        const totalDisplay = document.getElementById('checkout-total-display');
-        const shippingDisplay = document.getElementById('shipping-costs-display');
-        const discountNote = document.getElementById('stimulus-discount-note');
         const checkoutForm = document.getElementById('catalog-checkout-form');
         const submitBtn = document.getElementById('submit-btn');
-
-        const SHIPPING_THRESHOLD = 24.00;
 
         function updateSummary() {
             let itemsSubTotal = 0;
@@ -247,137 +218,61 @@
 
                 if (!itemWrapper) return;
 
-                const unitPrice = parseFloat(itemWrapper.dataset.unitPrice);
+                const baseVolume = parseFloat(itemWrapper.dataset.baseVolume);
                 const qty = parseInt(itemWrapper.dataset.qty);
-                const baseX = parseFloat(itemWrapper.dataset.baseX);
-                const baseY = parseFloat(itemWrapper.dataset.baseY);
-                const baseZ = parseFloat(itemWrapper.dataset.baseZ);
-
-                const scaledUnitPrice = unitPrice * Math.pow(scaleFactor, 3);
-                const itemTotal = scaledUnitPrice * qty;
-
                 totalQty += qty;
 
-                itemWrapper.querySelector('.val-x').textContent = Math.round(baseX * scaleFactor);
-                itemWrapper.querySelector('.val-y').textContent = Math.round(baseY * scaleFactor);
-                itemWrapper.querySelector('.val-z').textContent = Math.round(baseZ * scaleFactor);
+                const scaledVolumeMm3 = baseVolume * Math.pow(scaleFactor, 3);
+                const weightInGram = scaledVolumeMm3 * INFILL_FACTOR * PLA_DENSITY;
+                const materialCost = weightInGram * GRAM_PRICE;
 
-                const priceElem = document.getElementById('price-display-' + itemId);
-                if(priceElem) {
-                    priceElem.textContent = "€ " + itemTotal.toLocaleString('nl-NL', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                }
+                let baseProfit = (weightInGram < 50) ? 3.50 : 4.00;
+                let pricePerUnit = Math.max(4.00, (materialCost * PROFIT_MULT) + baseProfit);
+                let itemTotal = pricePerUnit * qty;
 
-                // Synchroniseer met verborgen inputveld van het item
-                const hiddenPriceInput = document.getElementById('calculated-price-hidden-' + itemId);
-                if (hiddenPriceInput) {
-                    hiddenPriceInput.value = itemTotal.toFixed(2);
-                }
+                document.getElementById('price-display-' + itemId).textContent = "€ " + itemTotal.toFixed(2).replace('.', ',');
+                document.getElementById('calculated-price-hidden-' + itemId).value = itemTotal.toFixed(2);
 
                 itemsSubTotal += itemTotal;
             });
 
-            const freeShippingText = document.getElementById('free-shipping-text');
-            const freeShippingProgress = document.getElementById('free-shipping-progress');
-
-            let shippingCosts = 8.50;
-            let appliedDiscount = 0;
-
-            if (totalQty === 2) {
-                shippingCosts = 7.50;
-                appliedDiscount = 1;
-            } else if (totalQty >= 3) {
-                shippingCosts = 6.50;
-                appliedDiscount = 2;
-            }
-
-            if (itemsSubTotal >= SHIPPING_THRESHOLD) {
-                if (freeShippingText) freeShippingText.innerHTML = '<span style="color: #16a34a;">Gefeliciteerd! Je hebt GRATIS verzending</span>';
-                if (freeShippingProgress) freeShippingProgress.style.width = '100%';
-                shippingCosts = 0.00;
-                if (discountNote) discountNote.style.display = 'none';
-            } else {
-                let remainder = SHIPPING_THRESHOLD - itemsSubTotal;
-                let percentage = (itemsSubTotal / SHIPPING_THRESHOLD) * 100;
-
-                if (freeShippingText) {
-                    freeShippingText.innerText = `Nog € ${remainder.toFixed(2).replace('.', ',')} tot gratis verzending`;
-                }
-                if (freeShippingProgress) {
-                    freeShippingProgress.style.width = percentage + '%';
-                }
-
-                if (appliedDiscount > 0 && totalQty > 0) {
-                    if (discountNote) {
-                        discountNote.innerText = `€ ${appliedDiscount},00 stapelkorting toegepast!`;
-                        discountNote.style.display = 'block';
-                    }
-                } else {
-                    if (discountNote) discountNote.style.display = 'none';
-                }
-            }
-
-            if (shippingDisplay) {
-                if (shippingCosts === 0 && totalQty > 0) {
-                    shippingDisplay.innerHTML = '<span style="color: #16a34a; font-weight: 800;">GRATIS</span>';
-                } else {
-                    shippingDisplay.textContent = "€ " + shippingCosts.toLocaleString('nl-NL', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                }
-            }
+            let shippingCosts = (itemsSubTotal >= SHIPPING_THRESHOLD) ? 0.00 : 8.50;
+            if (totalQty === 2 && itemsSubTotal < SHIPPING_THRESHOLD) shippingCosts = 7.50;
+            if (totalQty >= 3 && itemsSubTotal < SHIPPING_THRESHOLD) shippingCosts = 6.50;
 
             let grandTotal = itemsSubTotal + shippingCosts;
-            if(totalDisplay) {
-                totalDisplay.textContent = "€ " + grandTotal.toLocaleString('nl-NL', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-            }
 
-            // Update hoofd verborgen eindtotaal
-            const totalHiddenInput = document.getElementById('total_price_hidden');
-            if (totalHiddenInput) {
-                totalHiddenInput.value = grandTotal.toFixed(2);
-            }
+            document.getElementById('checkout-total-display').textContent = "€ " + grandTotal.toFixed(2).replace('.', ',');
+            document.getElementById('total_price_hidden').value = grandTotal.toFixed(2);
+            document.getElementById('shipping-costs-display').textContent = (shippingCosts === 0) ? "GRATIS" : "€ " + shippingCosts.toFixed(2).replace('.', ',');
+
+            const progress = Math.min((itemsSubTotal / SHIPPING_THRESHOLD) * 100, 100);
+            document.getElementById('free-shipping-progress').style.width = progress + '%';
         }
 
         scaleSelectors.forEach(s => s.addEventListener('change', updateSummary));
         updateSummary();
 
-        // AJAX Interceptie bij het submitten van het checkout formulier
         if (checkoutForm) {
             checkoutForm.addEventListener('submit', function(e) {
                 e.preventDefault();
-
                 submitBtn.disabled = true;
                 submitBtn.innerText = "Bezig met verwerken...";
 
-                const alertBox = document.getElementById('form-error-alert');
-                const errorList = document.getElementById('error-list');
-                alertBox.style.display = 'none';
-                errorList.innerHTML = '';
-
-                const formData = new FormData(checkoutForm);
-
                 fetch("{{ route('catalog.process') }}", {
                     method: "POST",
-                    body: formData,
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
+                    body: new FormData(checkoutForm),
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
                 })
-                    .then(response => response.json())
+                    .then(res => res.json())
                     .then(data => {
-                        if (data.success && data.stripe_url) {
-                            // Stuur de gebruiker direct door naar de Stripe betaalpagina!
-                            window.location.href = data.stripe_url;
-                        } else {
-                            throw new Error(data.message || data.error || 'Er is een fout opgetreden.');
-                        }
+                        if (data.success) window.location.href = data.stripe_url;
+                        else throw new Error(data.message);
                     })
-                    .catch(error => {
+                    .catch(err => {
+                        alert(err.message);
                         submitBtn.disabled = false;
                         submitBtn.innerText = "Aanvraag Bevestigen & Betalen";
-                        alertBox.style.display = 'block';
-
-                        const li = document.createElement('li');
-                        li.textContent = error.message;
-                        errorList.appendChild(li);
                     });
             });
         }

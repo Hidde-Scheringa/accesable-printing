@@ -9,15 +9,22 @@ use App\Models\Request as PrintRequest;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
+/**
+ * PaymentController beheert de gehele betaalcyclus en escrow-logica.
+ * Het systeem volgt een flow: Pending -> Escrow (betaald) -> Paid (goedgekeurd).
+ */
 class PaymentController extends Controller
 {
+    /**
+     * Handelt de redirect af na een succesvolle Stripe checkout.
+     * Update de status naar 'escrow' om de order te beveiligen.
+     */
     public function paymentSuccess($id)
     {
         $order = PrintRequest::findOrFail($id);
         if (auth()->id() !== $order->user_id) abort(403);
 
-        // FIX: Update de status naar 'escrow' zodra de gebruiker terugkeert van Stripe
-        // Hiermee verdwijnt de 'NU BETALEN' knop direct uit het dashboard.
+        // Zodra de klant terugkeert, zetten we de order in escrow.
         if ($order->payment_status === 'pending') {
             $order->update(['payment_status' => 'escrow']);
         }
@@ -25,6 +32,9 @@ class PaymentController extends Controller
         return redirect()->route('dashboard')->with('success', 'Bedankt! Je betaling is succesvol verwerkt en staat veilig in escrow.');
     }
 
+    /**
+     * Verwerkt de annulering van een betaalsessie door de klant.
+     */
     public function paymentCancel($id)
     {
         $order = PrintRequest::findOrFail($id);
@@ -33,11 +43,15 @@ class PaymentController extends Controller
         return redirect()->route('dashboard')->with('error', 'De betaling is geannuleerd.');
     }
 
+    /**
+     * Klant keurt de zending goed. Geld wordt vrijgegeven aan de printer.
+     */
     public function approveDelivery($id)
     {
         $order = PrintRequest::findOrFail($id);
         if (auth()->id() !== $order->user_id) abort(403);
 
+        // Alleen mogelijk als geld nog in escrow staat.
         if ($order->payment_status !== 'escrow') {
             return back()->with('error', 'Deze actie is op dit moment niet mogelijk.');
         }
@@ -46,6 +60,9 @@ class PaymentController extends Controller
         return back()->with('success', 'Bedankt! Het geld is vrijgegeven aan de printer.');
     }
 
+    /**
+     * Admin keurt een schadeclaim goed en voert een automatische refund uit.
+     */
     public function adminApproveDispute($id)
     {
         $order = PrintRequest::findOrFail($id);
@@ -58,6 +75,7 @@ class PaymentController extends Controller
             Stripe::setApiKey(config('services.stripe.secret'));
             $session = \Stripe\Checkout\Session::retrieve($order->stripe_checkout_id);
 
+            // Stripe refund uitvoeren
             \Stripe\Refund::create([
                 'payment_intent' => $session->payment_intent,
                 'reason'         => 'requested_by_customer',
@@ -70,6 +88,9 @@ class PaymentController extends Controller
         }
     }
 
+    /**
+     * Admin wijst schadeclaim af; geld blijft bij de printer (status: paid).
+     */
     public function adminRejectDispute($id)
     {
         $order = PrintRequest::findOrFail($id);
@@ -78,6 +99,9 @@ class PaymentController extends Controller
         return back()->with('success', 'Claim afgewezen: Betaling blijft behouden.');
     }
 
+    /**
+     * Laat de klant een order annuleren. Refund indien al in escrow.
+     */
     public function customerCancel($id)
     {
         $order = PrintRequest::findOrFail($id);
@@ -90,6 +114,7 @@ class PaymentController extends Controller
             return redirect()->back()->with('error', 'Annuleren is niet meer mogelijk.');
         }
 
+        // Als er betaald is, moeten we het geld via Stripe terugstorten.
         if ($order->payment_status === 'escrow' && !empty($order->stripe_checkout_id)) {
             try {
                 Stripe::setApiKey(config('services.stripe.secret'));
@@ -106,6 +131,9 @@ class PaymentController extends Controller
         return redirect()->back()->with('success', 'Je printverzoek is geannuleerd en terugbetaald.');
     }
 
+    /**
+     * Klant dient een klacht in over de kwaliteit (defect).
+     */
     public function customerDispute(Request $request, $id)
     {
         $order = PrintRequest::findOrFail($id);
@@ -132,6 +160,10 @@ class PaymentController extends Controller
         return redirect()->back()->with('error', 'Upload mislukt.');
     }
 
+    /**
+     * Webhook luistert naar events vanuit Stripe (buiten de browser om).
+     * Zorgt ervoor dat status wordt bijgewerkt zodra betaling succesvol is.
+     */
     public function handleWebhook(Request $request)
     {
         if (!$request->isMethod('post')) {
@@ -145,6 +177,7 @@ class PaymentController extends Controller
         try {
             $event = Webhook::constructEvent($payload, $sig_header, config('services.stripe.webhook_secret'));
 
+            // Wanneer de betaling voltooid is, zet de status op 'escrow'.
             if ($event->type === 'checkout.session.completed') {
                 $session = $event->data->object;
                 $order = PrintRequest::find($session->metadata->order_id);

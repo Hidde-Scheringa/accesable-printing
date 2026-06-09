@@ -140,7 +140,6 @@ class CatalogController extends Controller
     {
         $selection = Session::get('print_selection', []);
 
-        // Synchroniseer de gewijzigde aantallen uit het winkelwagen-formulier naar de sessie
         if ($request->has('quantities')) {
             foreach ($request->quantities as $id => $qty) {
                 $selection[$id]['quantity'] = max(1, intval($qty));
@@ -162,161 +161,96 @@ class CatalogController extends Controller
             return redirect()->route('catalog.index');
         }
 
+        foreach ($items as $item) {
+            $totalVolume = 0;
+            if (is_array($item->stl_files)) {
+                foreach ($item->stl_files as $file) {
+                    $totalVolume += ($file['volume'] ?? 0);
+                }
+            }
+            $item->total_volume_mm3 = $totalVolume;
+        }
+
         return view('catalog.checkout', compact('items', 'selection'));
     }
 
-    /**
-     * Verwerk de uiteindelijke bestelling en genereer een Stripe Checkout Sessie
-     */
     public function processCheckout(Request $request)
     {
-        // 1. Uitgebreide validatie
         $request->validate([
             'title'        => 'required|string|max:255',
             'street'       => 'required|string',
             'streetnumber' => 'required|string',
             'zipcode'      => 'required|string',
             'city'         => 'required|string',
-            'scales'       => 'required|array',
-            'colors'       => 'required|array',
-            'materials'    => 'required|array',
             'total_price_hidden' => 'required|numeric'
         ]);
 
         $selection = session('print_selection', []);
         if (empty($selection)) {
-            return response()->json(['success' => false, 'message' => 'Winkelwagen is leeg.'], 400);
+            return response()->json(['success' => false, 'message' => 'Winkelwagen leeg.'], 400);
         }
 
         $stlFilesForDb = [];
-        $totalPrice = 0;
+        $totalPrice = (float) $request->total_price_hidden;
         $totalQuantity = 0;
 
-        // Standaardwaarden instellen (voor de algemene kolommen van de tabel)
-        $chosenMaterial = 'FDM';
-        $chosenColor = 'Grijs';
-
-        // 2. Server-side herberekening op basis van de geselecteerde opties per product
         foreach ($selection as $itemId => $details) {
+            $totalQuantity += ($details['quantity'] ?? 1);
             $catalogItem = CatalogItem::find($itemId);
 
             if ($catalogItem) {
-                // Haal de schaal, kleur en materiaal op die specifiek voor dit item zijn gekozen
-                $currentScale = isset($request->scales[$itemId]) ? intval($request->scales[$itemId]) : ($details['scale'] ?? 100);
-                $currentQty = $details['quantity'] ?? ($details['qty'] ?? 1);
-
-                $itemColor = $request->colors[$itemId] ?? 'Grijs';
-                $itemMaterial = $request->materials[$itemId] ?? 'FDM';
-
-                // Bewaar de configuratie van het eerste item als fallback voor de hoofd-kolommen
-                if ($totalQuantity === 0) {
-                    $chosenColor = $itemColor;
-                    $chosenMaterial = $itemMaterial;
-                }
-
-                $scaleFactor = $currentScale / 100;
-                $totalQuantity += $currentQty;
-
-                // Prijs herberekenen (volume schaalt met kubieke factor)
-                $itemPrice = ($catalogItem->price * $currentQty) * pow($scaleFactor, 3);
-                $totalPrice += $itemPrice;
-
                 foreach ($catalogItem->stl_files as $stl) {
+                    // HIER BEREKENEN WE DE CM WAARDEN VOOR DE DATABASE
                     $stlFilesForDb[] = [
-                        'title'         => $stl['name'] ?? $catalogItem->title,
-                        'original_name' => $stl['name'] ?? 'model.stl',
+                        'title'         => $catalogItem->title,
                         'path'          => $stl['path'],
-                        'scale'         => $currentScale,
-                        'quantity'      => $currentQty,
-                        'color'         => $itemColor,
-                        'material'      => $itemMaterial,
-                        'price'         => number_format($itemPrice, 2, '.', ''),
-                        'x'             => $stl['x'] ?? 0,
-                        'y'             => $stl['y'] ?? 0,
-                        'z'             => $stl['z'] ?? 0,
-                        'from_catalog'  => true
+                        'scale'         => $details['scale'] ?? 100,
+                        'quantity'      => $details['quantity'] ?? 1,
+                        'price'         => $request->calculated_prices[$itemId] ?? 0,
+                        'from_catalog'  => true,
+                        // Opgeslagen als float voor makkelijke berekeningen in de toekomst
+                        'x_cm'          => ($stl['x'] ?? 0) / 10,
+                        'y_cm'          => ($stl['y'] ?? 0) / 10,
+                        'z_cm'          => ($stl['z'] ?? 0) / 10,
                     ];
                 }
             }
         }
 
-        // Verzending en stapelkorting berekenen
-        $shippingCosts = 8.50;
-        if ($totalQuantity == 2) {
-            $shippingCosts = 7.50;
-        } elseif ($totalQuantity >= 3) {
-            $shippingCosts = 6.50;
-        }
-
-        if ($totalPrice >= 24.00) {
-            $shippingCosts = 0.00;
-        }
-
-        $grandTotal = $totalPrice + $shippingCosts;
-
         try {
-            // 3. Maak het project aan in de database
             $order = PrintRequest::create([
                 'user_id'        => auth()->id(),
                 'title'          => $request->title,
-                'description'    => $request->description ?? "Catalogus bestelling",
-                'material'       => $chosenMaterial,
-                'color'          => $chosenColor,
-                'total_price'    => $grandTotal,
+                'description'    => $request->description ?? 'Catalogus bestelling',
+                'total_price'    => $totalPrice,
                 'stl_files'      => $stlFilesForDb,
                 'street'         => $request->street,
                 'streetnumber'   => $request->streetnumber,
                 'zipcode'        => $request->zipcode,
                 'city'           => $request->city,
                 'status'         => 'pending',
-                'payment_status' => 'unpaid',
+                'payment_status' => 'pending',
             ]);
 
-            // 4. Genereer de Stripe Checkout-sessie
             Stripe::setApiKey(config('services.stripe.secret'));
-
             $session = StripeSession::create([
                 'payment_method_types' => ['ideal', 'card'],
                 'line_items' => [[
-                    'price_data' => [
-                        'currency' => 'eur',
-                        'product_data' => [
-                            'name' => "3D Print Bestelling: " . $order->title,
-                            'description' => "Order #" . $order->id . " via Productcatalogus",
-                        ],
-                        'unit_amount' => (int)($grandTotal * 100), // Bedrag in centen
-                    ],
+                    'price_data' => ['currency' => 'eur', 'product_data' => ['name' => "Print: " . $order->title], 'unit_amount' => (int)($totalPrice * 100)],
                     'quantity' => 1,
                 ]],
                 'mode' => 'payment',
-                'metadata' => [
-                    'order_id' => $order->id
-                ],
-                'customer_email' => auth()->user()->email,
+                'metadata' => ['order_id' => $order->id],
                 'success_url' => route('payment.success', $order->id),
                 'cancel_url' => route('payment.cancel', $order->id),
             ]);
 
-            // 5. Koppel de Stripe Checkout-sessie aan de gecreëerde aanvraag
-            $order->update([
-                'stripe_checkout_id' => $session->id,
-                'payment_status'     => 'pending'
-            ]);
-
-            // 6. Winkelwagen legen na succesvolle initialisatie
+            $order->update(['stripe_checkout_id' => $session->id]);
             session()->forget('print_selection');
 
-            // Geef de Stripe-URL terug zodat de AJAX-handler in Blade de klant kan doorsturen
-            return response()->json([
-                'success' => true,
-                'stripe_url' => $session->url
-            ]);
-
+            return response()->json(['success' => true, 'stripe_url' => $session->url]);
         } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Fout tijdens initialiseren betaling: ' . $e->getMessage()
-            ], 500);
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
     }
 }

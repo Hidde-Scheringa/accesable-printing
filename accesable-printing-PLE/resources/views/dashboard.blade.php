@@ -130,9 +130,10 @@
                                             $qty = $file['quantity'] ?? 1;
 
                                             if (isset($file['from_catalog']) && $file['from_catalog']) {
-                                                $h_val = (($file['z'] ?? 0) / 10) * $scale;
-                                                $b_val = (($file['x'] ?? 0) / 10) * $scale;
-                                                $d_val = (($file['y'] ?? 0) / 10) * $scale;
+                                                // We proberen eerst de nieuwe _cm velden, als die leeg zijn, pakken we de oude x, y, z gedeeld door 10
+                                                $b_val = ($file['x_cm'] ?? (($file['x'] ?? 0) / 10)) * $scale;
+                                                $h_val = ($file['y_cm'] ?? (($file['y'] ?? 0) / 10)) * $scale;
+                                                $d_val = ($file['z_cm'] ?? (($file['z'] ?? 0) / 10)) * $scale;
                                             } else {
                                                 $h_val = (float)($file['h'] ?? 0);
                                                 $b_val = (float)($file['b'] ?? 0);
@@ -141,12 +142,13 @@
 
                                             $displayName = $file['title'] ?? $file['original_name'] ?? ('Model ' . ($index + 1));
                                         @endphp
+
                                         <div class="dimension-row">
                                             <span class="dim-name">
                                                 {{ \Illuminate\Support\Str::limit($displayName, 30) }}
                                                 <span style="color: var(--mp-gold); margin-left: 5px;">({{ $qty }}x)</span>:
                                             </span>
-                                            <span class="dim-values">
+                                                                                <span class="dim-values">
                                                 <b>H:</b> {{ number_format($h_val, 2, ',', '.') }}cm |
                                                 <b>B:</b> {{ number_format($b_val, 2, ',', '.') }}cm |
                                                 <b>D:</b> {{ number_format($d_val, 2, ',', '.') }}cm
