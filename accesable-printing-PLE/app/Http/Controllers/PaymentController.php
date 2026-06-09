@@ -16,7 +16,13 @@ class PaymentController extends Controller
         $order = PrintRequest::findOrFail($id);
         if (auth()->id() !== $order->user_id) abort(403);
 
-        return redirect()->route('dashboard')->with('success', 'Bedankt! Je betaling is geslaagd.');
+        // FIX: Update de status naar 'escrow' zodra de gebruiker terugkeert van Stripe
+        // Hiermee verdwijnt de 'NU BETALEN' knop direct uit het dashboard.
+        if ($order->payment_status === 'pending') {
+            $order->update(['payment_status' => 'escrow']);
+        }
+
+        return redirect()->route('dashboard')->with('success', 'Bedankt! Je betaling is succesvol verwerkt en staat veilig in escrow.');
     }
 
     public function paymentCancel($id)
@@ -67,7 +73,6 @@ class PaymentController extends Controller
     public function adminRejectDispute($id)
     {
         $order = PrintRequest::findOrFail($id);
-        // Zet status terug naar 'paid' zodat het geld bij de printer blijft
         $order->update(['payment_status' => 'paid']);
 
         return back()->with('success', 'Claim afgewezen: Betaling blijft behouden.');
@@ -129,7 +134,6 @@ class PaymentController extends Controller
 
     public function handleWebhook(Request $request)
     {
-        // Alleen POST accepteren; andere methoden geven een 403 (beveiliging)
         if (!$request->isMethod('post')) {
             return response('Unauthorized', 403);
         }

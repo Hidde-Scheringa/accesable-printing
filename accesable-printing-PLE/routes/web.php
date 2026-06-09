@@ -41,6 +41,7 @@ Route::middleware(['auth', 'customer'])->group(function () {
     Route::get('/requests/create', [RequestController::class, 'create'])->name('requests.create');
     Route::post('/requests', [RequestController::class, 'store'])->name('requests.store');
     Route::get('/catalogus/checkout', [CatalogController::class, 'checkout'])->name('catalog.checkout');
+    Route::get('/catalog/create', [CatalogController::class, 'create'])->name('catalog.create');
     Route::post('/catalogus/process', [CatalogController::class, 'processCheckout'])->name('catalog.process');
     Route::get('/payment/checkout/{id}', [PaymentController::class, 'checkout'])->name('payment.checkout');
 });
