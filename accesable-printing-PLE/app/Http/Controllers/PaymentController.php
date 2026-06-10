@@ -71,7 +71,6 @@ class PaymentController extends Controller
             return back()->with('error', 'Deze order heeft geen openstaande schadeclaim.');
         }
 
-        // Controleer of er een refund bedrag is ingesteld
         if ($order->suggested_refund <= 0) {
             return back()->with('error', 'Geen geldig refund bedrag gevonden.');
         }
@@ -80,21 +79,19 @@ class PaymentController extends Controller
             Stripe::setApiKey(config('services.stripe.secret'));
             $session = \Stripe\Checkout\Session::retrieve($order->stripe_checkout_id);
 
-            // Stripe Refund met een specifiek bedrag (in centen)
             \Stripe\Refund::create([
                 'payment_intent' => $session->payment_intent,
-                'amount'         => (int)($order->suggested_refund * 100), // Converteer euro naar centen
+                'amount'         => (int)($order->suggested_refund * 100),
                 'reason'         => 'requested_by_customer',
             ]);
 
-            // Status bijwerken: De order is niet meer 'disputed', maar deels terugbetaald
-            // We zetten de status op 'paid' (aangezien de rest van het bedrag bij jou blijft)
+            // HIER: Status naar 'refunded' zetten
             $order->update([
-                'payment_status' => 'paid',
-                'suggested_refund' => 0 // Reset de claim
+                'payment_status' => 'refunded',
+                'suggested_refund' => 0
             ]);
 
-            return back()->with('success', 'Claim goedgekeurd: €' . number_format($order->suggested_refund, 2, ',', '.') . ' is teruggestort.');
+            return back()->with('success', 'Claim goedgekeurd geld is teruggestort.');
 
         } catch (\Exception $e) {
             return back()->with('error', 'Fout bij Stripe: ' . $e->getMessage());
@@ -107,7 +104,11 @@ class PaymentController extends Controller
     public function adminRejectDispute($id)
     {
         $order = PrintRequest::findOrFail($id);
-        $order->update(['payment_status' => 'paid']);
+
+        // HIER: Terug naar 'paid' omdat de claim is afgewezen en de printer het geld houdt
+        $order->update([
+            'payment_status' => 'paid',
+        ]);
 
         return back()->with('success', 'Claim afgewezen: Betaling blijft behouden.');
     }

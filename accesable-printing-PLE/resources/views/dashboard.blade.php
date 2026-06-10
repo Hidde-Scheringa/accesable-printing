@@ -184,6 +184,10 @@
                                         <span class="mp-tag" style="background: #f3f4f6; color: #374151; border-color: #e5e7eb;">
                                             <i class="fa-solid fa-ban"></i> GEANNULEERD
                                         </span>
+                                    @elseif($request->payment_status === 'refunded')
+                                        <span class="mp-tag" style="background: #dcfce7; color: #166534; border-color: #bbf7d0;">
+                                            <i class="fa-solid fa-money-bill-transfer"></i>  Claim Terugestort
+                                        </span>
                                     @endif
 
                                     <span class="mp-tag mp-tag-status">Productie: {{ strtoupper($request->status ?? 'In behandeling') }}</span>
@@ -261,38 +265,41 @@
                                                         </p>
                                                     </div>
 
-                                                    <div style="display: flex; gap: 8px;">
+                                                    <div style="display: flex; gap: 8px; margin-top: 10px;">
+                                                        <button type="button" onclick="document.getElementById('dispute-form-{{ $request->id }}').style.display='block';"
+                                                                class="mp-btn-secondary" style="border-color: #f97316; color: #f97316;">
+                                                            <i class="fa-solid fa-triangle-exclamation"></i> Defect melden
+                                                        </button>
+
+                                                        <form action="{{ route('order.approve', $request->id) }}" method="POST" onsubmit="return confirm('Weet je zeker dat je de miniatures in goede orde hebt ontvangen?');">
+                                                            @csrf
+                                                            <button type="submit" class="mp-btn-action" style="background: #2e7d32; border: none; cursor: pointer;">
+                                                                <i class="fa-solid fa-check-double"></i> Order goedkeuren
+                                                            </button>
+                                                        </form>
+                                                    </div>
+
+                                                    <div id="dispute-form-{{ $request->id }}" class="mp-dispute-modal-wrap" style="display: none; margin-top: 15px; border: 1px solid var(--mp-border); padding: 15px; border-radius: 4px; background: #fffdf5;">
+                                                        <h3 style="margin-top:0; font-size: 14px; color: #c2410c;">Schadeclaim indienen</h3>
+                                                        <p style="font-size: 12px; color: #666;">Selecteer de defecte items en upload een bewijsfoto.</p>
+
                                                         <form action="{{ route('order.dispute', $request->id) }}" method="POST" enctype="multipart/form-data">
                                                             @csrf
-                                                            <h3>Defect melden</h3>
-                                                            <p>Selecteer welke modellen beschadigd zijn en geef aan hoeveel stuks.</p>
-
-                                                            @php
-                                                                $files = is_array($request->stl_files) ? $request->stl_files : json_decode($request->stl_files, true);
-                                                            @endphp
-
                                                             @foreach($files as $file)
-                                                                <div style="margin-bottom: 15px; border: 1px solid #ddd; padding: 10px;">
-                                                                    <strong>{{ $file['title'] }}</strong> (Gekocht: {{ $file['quantity'] }})
-
+                                                                <div class="mp-dispute-item-row">
+                                                                    <span>{{ \Illuminate\Support\Str::limit($file['title'], 20) }}</span>
                                                                     <input type="hidden" name="items[]" value="{{ $file['title'] }}">
-
-                                                                    <label>Aantal defect:</label>
-                                                                    <input type="number" name="qtys[]" min="0" max="{{ $file['quantity'] }}" value="0">
+                                                                    <input type="number" name="qtys[]" min="0" max="{{ $file['quantity'] }}" value="0" class="mp-dispute-input">
                                                                 </div>
                                                             @endforeach
 
-                                                            <textarea name="defect_reason" placeholder="Omschrijf het defect..." required></textarea>
-                                                            <input type="file" name="defect_image" accept="image/*" required>
+                                                            <textarea name="defect_reason" required class="mp-dispute-textarea" placeholder="Omschrijf het defect..."></textarea>
+                                                            <input type="file" name="defect_image" accept="image/*" required style="display:block; margin: 10px 0; font-size: 12px;">
 
-                                                            <button type="submit">Claim indienen</button>
-                                                        </form>
-
-                                                        <form action="{{ route('order.approve', $request->id) }}" method="POST" onsubmit="return confirm('Weet je zeker dat je de miniatures in goede orde hebt ontvangen? Dit sluit de bestelling officieel af.');">
-                                                            @csrf
-                                                            <button type="submit" class="mp-btn-action" style="background: #2e7d32; color: #ffffff; padding: 10px 15px; border: none; cursor: pointer; font-weight: 700;">
-                                                                <i class="fa-solid fa-check-double"></i> Order goedkeuren
-                                                            </button>
+                                                            <div style="display: flex; gap: 10px; margin-top: 10px;">
+                                                                <button type="submit" class="mp-btn-action" style="background: #c2410c;">Claim verzenden</button>
+                                                                <button type="button" class="mp-btn-secondary" onclick="document.getElementById('dispute-form-{{ $request->id }}').style.display='none';">Annuleren</button>
+                                                            </div>
                                                         </form>
                                                     </div>
 
@@ -402,6 +409,41 @@
     .mp-switch-btn { flex: 1; background: white; border: 1px solid var(--mp-border); font-size: 10px; padding: 8px 5px; cursor: pointer; border-bottom: none; }
     .mp-switch-btn.active { background: var(--mp-gold); color: white; }
     .stl-loader-spinner { height: 100%; display: flex; align-items: center; justify-content: center; font-size: 12px; color: var(--mp-text-muted); }
+
+    /* Dispute Form Styling */
+    .mp-dispute-modal-wrap {
+        background: #fffdf5;
+        border: 1px solid #fde68a;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    }
+
+    .mp-dispute-item-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: #fff;
+        padding: 6px 10px;
+        margin-bottom: 5px;
+        border: 1px solid #eee;
+        font-size: 12px;
+    }
+
+    .mp-dispute-input {
+        width: 50px;
+        padding: 2px 5px;
+        border: 1px solid #ccc;
+        text-align: center;
+    }
+
+    .mp-dispute-textarea {
+        width: 100%;
+        height: 70px;
+        padding: 8px;
+        margin-top: 10px;
+        border: 1px solid #ccc;
+        font-size: 12px;
+        resize: vertical;
+    }
 
     @media (max-width: 850px) {
         .mp-layout-grid { grid-template-columns: 1fr; }
