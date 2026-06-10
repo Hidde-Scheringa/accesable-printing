@@ -44,6 +44,7 @@ class Request extends Model
         'scale' => 'integer',
         'streetnumber' => 'integer',
         'total_price' => 'decimal:2',
+        'defect_image_path' => 'array',
     ];
 
     /**

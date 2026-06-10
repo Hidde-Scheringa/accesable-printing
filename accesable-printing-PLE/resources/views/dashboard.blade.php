@@ -294,7 +294,8 @@
                                                             @endforeach
 
                                                             <textarea name="defect_reason" required class="mp-dispute-textarea" placeholder="Omschrijf het defect..."></textarea>
-                                                            <input type="file" name="defect_image" accept="image/*" required style="display:block; margin: 10px 0; font-size: 12px;">
+                                                            <label>Upload schadefoto's (meerdere selecteren mogelijk):</label>
+                                                            <input type="file" name="defect_images[]" accept="image/*" multiple required>
 
                                                             <div style="display: flex; gap: 10px; margin-top: 10px;">
                                                                 <button type="submit" class="mp-btn-action" style="background: #c2410c;">Claim verzenden</button>

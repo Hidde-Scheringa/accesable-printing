@@ -238,13 +238,23 @@
                                             "{{ $request->defect_reason ?? 'Geen toelichting gegeven' }}"
                                         </p>
 
-                                        @if($request->defect_image_path)
-                                            <a href="{{ asset('storage/' . $request->defect_image_path) }}" target="_blank"
-                                               style="display: inline-block; font-size: 12px; color: #2563eb; text-decoration: underline; margin-bottom: 15px;">
-                                                <i class="fa-solid fa-image"></i> Bekijk geüploade schadefoto
-                                            </a>
-                                        @endif
+                                        @php
+                                            // Zorg dat $images altijd een array is, ook als het veld leeg of null is
+                                            $images = is_array($request->defect_image_path)
+                                                ? $request->defect_image_path
+                                                : (json_decode($request->defect_image_path, true) ?? []);
+                                        @endphp
 
+                                        {{-- Nu kun je veilig loopen --}}
+                                        @if(count($images) > 0)
+                                            @foreach($images as $path)
+                                                <a href="{{ asset('storage/' . $path) }}" target="_blank">
+                                                    <img src="{{ asset('storage/' . $path) }}" style="width: 50px; height: 50px; object-fit: cover;">
+                                                </a>
+                                            @endforeach
+                                        @else
+                                            <span style="font-size: 11px; color: #999;">Geen foto's</span>
+                                        @endif
                                         <div style="display: flex; gap: 10px; border-top: 1px solid #fef3c7; padding-top: 10px;">
                                             <form action="{{ route('admin.dispute.approve', $request->id) }}" method="POST"
                                                   onsubmit="return confirm('LET OP: Er wordt €{{ number_format($request->suggested_refund, 2, ',', '.') }} automatisch teruggestort. Doorgaan?');">

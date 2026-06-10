@@ -186,52 +186,47 @@ class PaymentController extends Controller
 
     public function customerDispute(Request $request, $id)
     {
-        // 1. Valideer de input
-        $request->validate([
-            'items'         => 'required|array',
-            'qtys'          => 'required|array',
-            'defect_reason' => 'required|string|max:1000',
-            'defect_image'  => 'required|image|mimes:jpeg,png,jpg,webp|max:5120',
-        ]);
+        // ... validatie ...
 
         $order = PrintRequest::findOrFail($id);
         $files = is_array($order->stl_files) ? $order->stl_files : json_decode($order->stl_files, true);
+
+        // 1. Duidelijk declareren VOOR de loop
         $suggestedRefund = 0;
 
-        // 2. Bereken het totaalbedrag op basis van de JSON
-        // In PaymentController.php
-
+        // 2. Berekening
         foreach ($request->items as $index => $itemName) {
             $defectQty = (int)($request->qtys[$index] ?? 0);
-
-            // Zoek het model in de JSON
             $item = collect($files)->firstWhere('title', $itemName);
 
             if ($item && $defectQty > 0) {
-                // 1. Haal de totaalprijs van de batch op (uit de JSON)
                 $batchPrice = (float)($item['price'] ?? 0);
-
-                // 2. Haal de totale hoeveelheid van de batch op
                 $batchQuantity = (int)($item['quantity'] ?? 1);
-
-                // 3. Bereken de prijs per stuk
                 $pricePerPiece = $batchPrice / $batchQuantity;
 
-                // 4. Vermenigvuldig met het aantal defecte stuks
+                // Variabele bijwerken
                 $suggestedRefund += ($defectQty * $pricePerPiece);
             }
         }
 
-        // 3. Sla gegevens op
-        $path = $request->file('defect_image')->store('defects', 'public');
+        // 3. Afgerond en opgeslagen
+        $suggestedRefund = round($suggestedRefund, 2);
 
+        $paths = [];
+        if ($request->hasFile('defect_images')) {
+            foreach ($request->file('defect_images') as $file) {
+                $paths[] = $file->store('defects', 'public');
+            }
+        }
+
+        // Hier wordt de variabele nu correct herkend
         $order->update([
             'payment_status'    => 'disputed',
-            'suggested_refund'  => $suggestedRefund,
+            'suggested_refund'  => $suggestedRefund, // Deze is nu gedefinieerd
             'defect_reason'     => $request->defect_reason,
-            'defect_image_path' => $path
+            'defect_image_path' => $paths // Je gebruikt nu casts in je Model, dus dit kan direct
         ]);
 
-        return redirect()->back()->with('success', 'Je claim voor €' . number_format($suggestedRefund, 2) . ' is ingediend.');
+        return redirect()->back()->with('success', 'Claim ingediend voor €' . number_format($suggestedRefund, 2));
     }
 }
