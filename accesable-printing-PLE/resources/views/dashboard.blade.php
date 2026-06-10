@@ -262,9 +262,31 @@
                                                     </div>
 
                                                     <div style="display: flex; gap: 8px;">
-                                                        <button type="button" class="mp-btn-secondary" style="border-color: #f97316; color: #f97316; padding: 10px 15px; font-size: 12px;" onclick="document.getElementById('dispute-form-{{ $request->id }}').style.display = 'block'; this.style.display = 'none';">
-                                                            <i class="fa-solid fa-triangle-exclamation"></i> Defect Melden
-                                                        </button>
+                                                        <form action="{{ route('order.dispute', $request->id) }}" method="POST" enctype="multipart/form-data">
+                                                            @csrf
+                                                            <h3>Defect melden</h3>
+                                                            <p>Selecteer welke modellen beschadigd zijn en geef aan hoeveel stuks.</p>
+
+                                                            @php
+                                                                $files = is_array($request->stl_files) ? $request->stl_files : json_decode($request->stl_files, true);
+                                                            @endphp
+
+                                                            @foreach($files as $file)
+                                                                <div style="margin-bottom: 15px; border: 1px solid #ddd; padding: 10px;">
+                                                                    <strong>{{ $file['title'] }}</strong> (Gekocht: {{ $file['quantity'] }})
+
+                                                                    <input type="hidden" name="items[]" value="{{ $file['title'] }}">
+
+                                                                    <label>Aantal defect:</label>
+                                                                    <input type="number" name="qtys[]" min="0" max="{{ $file['quantity'] }}" value="0">
+                                                                </div>
+                                                            @endforeach
+
+                                                            <textarea name="defect_reason" placeholder="Omschrijf het defect..." required></textarea>
+                                                            <input type="file" name="defect_image" accept="image/*" required>
+
+                                                            <button type="submit">Claim indienen</button>
+                                                        </form>
 
                                                         <form action="{{ route('order.approve', $request->id) }}" method="POST" onsubmit="return confirm('Weet je zeker dat je de miniatures in goede orde hebt ontvangen? Dit sluit de bestelling officieel af.');">
                                                             @csrf

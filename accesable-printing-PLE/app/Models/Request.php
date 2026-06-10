@@ -33,6 +33,7 @@ class Request extends Model
         // --- NIEUW: Deze stonden er nog niet in! ---
         'defect_reason',       // Zorgt dat de reden mag worden opgeslagen
         'defect_image_path',   // Zorgt dat het fotopad mag worden opgeslagen
+        'suggested_refund'
     ];
 
     /**

@@ -224,30 +224,41 @@
 
                                 {{-- COMPONENT: BIJ DEFECT/DISPUTE DE REDEN EN FOTO INLINE TONEN --}}
                                 @if($request->payment_status === 'disputed')
-                                    <div style="margin-top: 10px; background: #fff5f5; border: 1px solid #fecaca; padding: 10px; border-radius: 4px;">
-                                        <strong style="font-size: 11px; color: #991b1b; display: block; text-transform: uppercase;">⚠️ Klant meldt defect:</strong>
-                                        <p style="font-size: 12px; margin: 5px 0; color: #333; line-height: 1.4;">
-                                            "{{ $request->defect_reason ?? 'Geen reden opgegeven' }}"
+                                    <div style="margin-top: 15px; background: #fffdf5; border: 1px solid #fde68a; padding: 15px; border-radius: 6px;">
+                                        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
+                                            <strong style="font-size: 12px; color: #92400e; text-transform: uppercase; letter-spacing: 0.5px;">
+                                                <i class="fa-solid fa-triangle-exclamation"></i> Openstaande Schadeclaim
+                                            </strong>
+                                            <span style="font-size: 14px; font-weight: bold; color: #b91c1c; background: #fee2e2; padding: 2px 8px; border-radius: 4px;">
+                Claimbedrag: € {{ number_format($request->suggested_refund, 2, ',', '.') }}
+            </span>
+                                        </div>
+
+                                        <p style="font-size: 13px; color: #4b5563; font-style: italic; margin-bottom: 10px;">
+                                            "{{ $request->defect_reason ?? 'Geen toelichting gegeven' }}"
                                         </p>
+
                                         @if($request->defect_image_path)
-                                            <a href="{{ asset('storage/' . $request->defect_image_path) }}" target="_blank" style="display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--p-accent); font-weight: bold; text-decoration: underline; margin-bottom: 10px;">
-                                                <i class="fa-solid fa-image"></i> Bekijk schadefoto
+                                            <a href="{{ asset('storage/' . $request->defect_image_path) }}" target="_blank"
+                                               style="display: inline-block; font-size: 12px; color: #2563eb; text-decoration: underline; margin-bottom: 15px;">
+                                                <i class="fa-solid fa-image"></i> Bekijk geüploade schadefoto
                                             </a>
                                         @endif
 
-                                        {{-- ACTIEKNOPPEN VOOR ADMIN --}}
-                                        <div style="display: flex; gap: 5px; margin-top: 5px;">
-                                            <form action="{{ route('admin.dispute.approve', $request->id) }}" method="POST" onsubmit="return confirm('Weet je het zeker? Het geld wordt nu teruggestort naar de klant.');">
+                                        <div style="display: flex; gap: 10px; border-top: 1px solid #fef3c7; padding-top: 10px;">
+                                            <form action="{{ route('admin.dispute.approve', $request->id) }}" method="POST"
+                                                  onsubmit="return confirm('LET OP: Er wordt €{{ number_format($request->suggested_refund, 2, ',', '.') }} automatisch teruggestort. Doorgaan?');">
                                                 @csrf
-                                                <button type="submit" style="background: #ef4444; color: white; border: none; padding: 5px 8px; font-size: 10px; border-radius: 3px; cursor: pointer; font-weight: bold;">
-                                                    GELD TERUGSTORTEN
+                                                <button type="submit" style="background: #059669; color: white; border: none; padding: 7px 12px; font-size: 11px; border-radius: 4px; cursor: pointer; font-weight: bold; text-transform: uppercase;">
+                                                    <i class="fa-solid fa-check"></i> Refund Goedkeuren
                                                 </button>
                                             </form>
 
-                                            <form action="{{ route('admin.dispute.reject', $request->id) }}" method="POST">
+                                            <form action="{{ route('admin.dispute.reject', $request->id) }}" method="POST"
+                                                  onsubmit="return confirm('Weet je zeker dat je deze claim wilt afwijzen?');">
                                                 @csrf
-                                                <button type="submit" style="background: #3b82f6; color: white; border: none; padding: 5px 8px; font-size: 10px; border-radius: 3px; cursor: pointer; font-weight: bold;">
-                                                    CLAIM AFWIJZEN
+                                                <button type="submit" style="background: #4b5563; color: white; border: none; padding: 7px 12px; font-size: 11px; border-radius: 4px; cursor: pointer; font-weight: bold; text-transform: uppercase;">
+                                                    <i class="fa-solid fa-xmark"></i> Claim Afwijzen
                                                 </button>
                                             </form>
                                         </div>

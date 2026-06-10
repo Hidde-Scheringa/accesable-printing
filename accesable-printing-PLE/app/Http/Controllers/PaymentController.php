@@ -71,18 +71,31 @@ class PaymentController extends Controller
             return back()->with('error', 'Deze order heeft geen openstaande schadeclaim.');
         }
 
+        // Controleer of er een refund bedrag is ingesteld
+        if ($order->suggested_refund <= 0) {
+            return back()->with('error', 'Geen geldig refund bedrag gevonden.');
+        }
+
         try {
             Stripe::setApiKey(config('services.stripe.secret'));
             $session = \Stripe\Checkout\Session::retrieve($order->stripe_checkout_id);
 
-            // Stripe refund uitvoeren
+            // Stripe Refund met een specifiek bedrag (in centen)
             \Stripe\Refund::create([
                 'payment_intent' => $session->payment_intent,
+                'amount'         => (int)($order->suggested_refund * 100), // Converteer euro naar centen
                 'reason'         => 'requested_by_customer',
             ]);
 
-            $order->update(['payment_status' => 'cancelled', 'status' => 'cancelled']);
-            return back()->with('success', 'Claim goedgekeurd: Geld is automatisch teruggestort.');
+            // Status bijwerken: De order is niet meer 'disputed', maar deels terugbetaald
+            // We zetten de status op 'paid' (aangezien de rest van het bedrag bij jou blijft)
+            $order->update([
+                'payment_status' => 'paid',
+                'suggested_refund' => 0 // Reset de claim
+            ]);
+
+            return back()->with('success', 'Claim goedgekeurd: €' . number_format($order->suggested_refund, 2, ',', '.') . ' is teruggestort.');
+
         } catch (\Exception $e) {
             return back()->with('error', 'Fout bij Stripe: ' . $e->getMessage());
         }
@@ -132,35 +145,6 @@ class PaymentController extends Controller
     }
 
     /**
-     * Klant dient een klacht in over de kwaliteit (defect).
-     */
-    public function customerDispute(Request $request, $id)
-    {
-        $order = PrintRequest::findOrFail($id);
-        if (auth()->id() !== $order->user_id) abort(403);
-
-        if ($order->payment_status !== 'escrow') {
-            return redirect()->back()->with('error', 'Je kunt geen claim indienen op dit verzoek.');
-        }
-
-        $request->validate([
-            'defect_reason' => 'required|string|max:1000',
-            'defect_image'  => 'required|image|mimes:jpeg,png,jpg,webp|max:5120',
-        ]);
-
-        if ($request->hasFile('defect_image')) {
-            $path = $request->file('defect_image')->store('defects', 'public');
-            $order->update([
-                'payment_status'    => 'disputed',
-                'defect_reason'     => $request->defect_reason,
-                'defect_image_path' => $path
-            ]);
-            return redirect()->back()->with('success', 'Schadeclaim ingediend.');
-        }
-        return redirect()->back()->with('error', 'Upload mislukt.');
-    }
-
-    /**
      * Webhook luistert naar events vanuit Stripe (buiten de browser om).
      * Zorgt ervoor dat status wordt bijgewerkt zodra betaling succesvol is.
      */
@@ -195,5 +179,58 @@ class PaymentController extends Controller
         }
 
         return response()->json(['status' => 'success']);
+    }
+
+    // In PaymentController.php
+
+    public function customerDispute(Request $request, $id)
+    {
+        // 1. Valideer de input
+        $request->validate([
+            'items'         => 'required|array',
+            'qtys'          => 'required|array',
+            'defect_reason' => 'required|string|max:1000',
+            'defect_image'  => 'required|image|mimes:jpeg,png,jpg,webp|max:5120',
+        ]);
+
+        $order = PrintRequest::findOrFail($id);
+        $files = is_array($order->stl_files) ? $order->stl_files : json_decode($order->stl_files, true);
+        $suggestedRefund = 0;
+
+        // 2. Bereken het totaalbedrag op basis van de JSON
+        // In PaymentController.php
+
+        foreach ($request->items as $index => $itemName) {
+            $defectQty = (int)($request->qtys[$index] ?? 0);
+
+            // Zoek het model in de JSON
+            $item = collect($files)->firstWhere('title', $itemName);
+
+            if ($item && $defectQty > 0) {
+                // 1. Haal de totaalprijs van de batch op (uit de JSON)
+                $batchPrice = (float)($item['price'] ?? 0);
+
+                // 2. Haal de totale hoeveelheid van de batch op
+                $batchQuantity = (int)($item['quantity'] ?? 1);
+
+                // 3. Bereken de prijs per stuk
+                $pricePerPiece = $batchPrice / $batchQuantity;
+
+                // 4. Vermenigvuldig met het aantal defecte stuks
+                $suggestedRefund += ($defectQty * $pricePerPiece);
+            }
+        }
+
+        // 3. Sla gegevens op
+        $path = $request->file('defect_image')->store('defects', 'public');
+
+        $order->update([
+            'payment_status'    => 'disputed',
+            'suggested_refund'  => $suggestedRefund,
+            'defect_reason'     => $request->defect_reason,
+            'defect_image_path' => $path
+        ]);
+
+        return redirect()->back()->with('success', 'Je claim voor €' . number_format($suggestedRefund, 2) . ' is ingediend.');
     }
 }
