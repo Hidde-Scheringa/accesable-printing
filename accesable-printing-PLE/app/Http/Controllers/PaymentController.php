@@ -229,4 +229,36 @@ class PaymentController extends Controller
 
         return redirect()->back()->with('success', 'Claim ingediend voor €' . number_format($suggestedRefund, 2));
     }
+
+    public function resumePayment($id)
+    {
+        $order = \App\Models\Request::findOrFail($id);
+        if (auth()->id() !== $order->user_id) abort(403);
+
+        if ($order->payment_status !== 'pending') {
+            return redirect()->route('dashboard')->with('error', 'Deze bestelling kan niet meer betaald worden.');
+        }
+
+        \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
+
+        $session = \Stripe\Checkout\Session::create([
+            'payment_method_types' => ['ideal', 'card'],
+            'line_items' => [[
+                'price_data' => [
+                    'currency' => 'eur',
+                    'product_data' => ['name' => "Print: " . $order->title],
+                    'unit_amount' => (int)($order->total_price * 100)
+                ],
+                'quantity' => 1,
+            ]],
+            'mode' => 'payment',
+            'metadata' => ['order_id' => $order->id],
+            'success_url' => route('payment.success', $order->id),
+            'cancel_url'  => route('payment.cancel', $order->id),
+        ]);
+
+        $order->update(['stripe_checkout_id' => $session->id]);
+
+        return redirect($session->url);
+    }
 }

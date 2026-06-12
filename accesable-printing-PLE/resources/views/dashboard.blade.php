@@ -231,7 +231,7 @@
                                                         Annuleren
                                                     </button>
                                                 </form>
-                                                <a href="{{ route('payment.checkout', $request->id) }}" class="mp-btn-action" style="background: var(--mp-gold); color: #2d2a26; padding: 10px 15px;">
+                                                <a href="{{ route('payment.resume', $request->id) }}" class="mp-btn-action" style="background: var(--mp-gold); color: #2d2a26; padding: 10px 15px;">
                                                     <i class="fa-solid fa-credit-card"></i> Nu Betalen
                                                 </a>
                                             </div>
@@ -373,7 +373,7 @@
     .mp-action-group-primary { display: flex; align-items: center; gap: 12px; }
     .mp-btn-action { background: var(--mp-accent); color: #f1ede4; text-decoration: none; padding: 12px 20px; border-radius: 2px; font-weight: 700; font-size: 13px; transition: 0.2s; text-transform: uppercase; display: flex; align-items: center; gap: 8px; }
     .mp-btn-action:hover { background: var(--mp-accent-hover); transform: translateY(-1px); }
-    .mp-btn-secondary { background: transparent; border: 1px solid var(--mp-gold); padding: 10px 18px; border-radius: 2px; cursor: pointer; color: var(--mp-gold); font-size: 11px; font-weight: 700; text-transform: uppercase; text-decoration: none; transition: 0.2s; }
+    .mp-btn-secondary { background: transparent; border: 1px solid var(--mp-gold); margin-top: 15px; padding: 10px 18px; border-radius: 2px; cursor: pointer; color: var(--mp-gold); font-size: 11px; font-weight: 700; text-transform: uppercase; text-decoration: none; transition: 0.2s; }
     .mp-layout-grid { display: grid; grid-template-columns: 240px 1fr; gap: 24px; }
     .mp-filter-box { background: var(--mp-card-bg); border-radius: 4px; padding: 20px; box-shadow: var(--mp-shadow); border-top: 4px solid var(--mp-gold); }
     .mp-filter-header { font-size: 15px; font-weight: 700; color: var(--mp-text); margin-bottom: 15px; text-transform: uppercase; }

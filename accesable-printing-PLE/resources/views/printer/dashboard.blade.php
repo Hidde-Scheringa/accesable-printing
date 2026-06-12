@@ -52,10 +52,6 @@
                 <h4>Totaal Aanvragen</h4>
                 <p>{{ $allRequests->count() }}</p>
             </div>
-            <div class="stat-card pending">
-                <h4>Wacht op Betaling</h4>
-                <p>{{ $allRequests->where('payment_status', 'pending')->count() }}</p>
-            </div>
             <div class="stat-card" style="border-left-color: #166534;">
                 <h4>voltooide orders</h4>
                 <p>{{ $allRequests->where('payment_status', 'escrow')->count() + $allRequests->where('payment_status', 'paid')->count() }}</p>

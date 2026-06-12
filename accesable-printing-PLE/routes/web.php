@@ -44,6 +44,9 @@ Route::middleware(['auth', 'customer'])->group(function () {
     Route::get('/catalog/create', [CatalogController::class, 'create'])->name('catalog.create');
     Route::post('/catalogus/process', [CatalogController::class, 'processCheckout'])->name('catalog.process');
     Route::get('/payment/checkout/{id}', [PaymentController::class, 'checkout'])->name('payment.checkout');
+    // Route voor het hervatten van een betaling
+    Route::get('/payment/resume/{id}', [PaymentController::class, 'resumePayment'])->name('payment.resume');
+
 
     Route::post('/order/{id}/dispute', [PaymentController::class, 'customerDispute'])->name('order.dispute');
 });

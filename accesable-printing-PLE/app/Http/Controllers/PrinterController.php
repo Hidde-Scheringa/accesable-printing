@@ -13,10 +13,16 @@ class PrinterController extends Controller
      */
     public function index()
     {
-        // We halen alle aanvragen op inclusief de relatie naar de user.
-        $allRequests = PrintRequest::with('user')->latest()->get();
+        // 1. Alle aanvragen voor de stats (inclusief pending)
+        $statsRequests = PrintRequest::all();
 
-        return view('printer.dashboard', compact('allRequests'));
+        // 2. Gefilterde aanvragen voor de tabel (ZONDER 'pending' orders)
+        $allRequests = PrintRequest::with('user')
+            ->where('payment_status', '!=', 'pending')
+            ->latest()
+            ->get();
+
+        return view('printer.dashboard', compact('allRequests', 'statsRequests'));
     }
 
     /**
