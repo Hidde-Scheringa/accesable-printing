@@ -46,13 +46,16 @@
         <div class="mp-container">
             <div class="mp-intro-layout">
                 <div class="mp-intro-content">
-                    <h3 class="mp-section-header">Maak je wensen werkelijkheid</h3>
+                    <h3 class="mp-section-header">De plek voor al uw DnD miniatures</h3>
                     <p class="mp-intro-text">
                         Laat je <strong>Dungeons and Dragons</strong> miniatures wensen werkelijkheid worden.
                         <strong>Accessible Printing</strong> brengt jouw campaigns naar het volgende niveau door miniatures en gebouwen tot leven te wekken.
                     </p>
                     <p class="mp-intro-text">
                         Lever je eigen models aan of kies een prachtig ontwerp uit onze groeiende <strong>catalogus</strong>.
+                    </p>
+                    <p class="mp-intro-text">
+                        Graag even zien wat klanten hebben gemaakt van onze geprinte mini's neem een kijkje in de <strong>Showcase</strong>.
                     </p>
                     <div class="intro-actions" style="display: flex; gap: 15px;">
                         <a href="{{ route('catalog.index') }}" class="mp-btn-action">Bekijk de Catalogus</a>

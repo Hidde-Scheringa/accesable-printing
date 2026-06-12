@@ -174,6 +174,23 @@
     .mp-remove-btn { background: transparent; border: 1px solid #eee; color: #ccc; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; }
     .mp-remove-btn:hover { border-color: var(--mp-accent); color: var(--mp-accent); }
     .mp-empty-card { background: var(--mp-card-bg); border: 2px dashed var(--mp-gold); padding: 60px; text-align: center; border-radius: 4px; }
+
+    .mp-auth-prompt {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 15px;
+        background: #fdfdfd;
+        border: 1px solid var(--mp-border);
+        border-radius: 4px;
+    }
+
+    /* Forceer de knop om altijd 100% breedte te zijn zonder overflow door padding */
+    .mp-btn-full {
+        width: 100%;
+        display: block;
+        box-sizing: border-box; /* Cruciaal: zorgt dat padding binnen de breedte valt */
+        margin: 0;
+    }
 </style>
 
 <script>

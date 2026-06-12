@@ -130,10 +130,11 @@
                                             $qty = $file['quantity'] ?? 1;
 
                                             if (isset($file['from_catalog']) && $file['from_catalog']) {
-                                                // We proberen eerst de nieuwe _cm velden, als die leeg zijn, pakken we de oude x, y, z gedeeld door 10
-                                                $b_val = ($file['x_cm'] ?? (($file['x'] ?? 0) / 10)) * $scale;
-                                                $h_val = ($file['y_cm'] ?? (($file['y'] ?? 0) / 10)) * $scale;
-                                                $d_val = ($file['z_cm'] ?? (($file['z'] ?? 0) / 10)) * $scale;
+                                                // Gebruik de _cm waarden direct als ze bestaan (want die zijn al geschaald in de controller)
+                                                // Als ze niet bestaan, pak de basis (x/10) en pas dan pas de schaal toe
+                                                $b_val = $file['x_cm'] ?? (($file['x'] ?? 0) / 10 * ($file['scale'] / 100));
+                                                $h_val = $file['y_cm'] ?? (($file['y'] ?? 0) / 10 * ($file['scale'] / 100));
+                                                $d_val = $file['z_cm'] ?? (($file['z'] ?? 0) / 10 * ($file['scale'] / 100));
                                             } else {
                                                 $h_val = (float)($file['h'] ?? 0);
                                                 $b_val = (float)($file['b'] ?? 0);

@@ -61,7 +61,7 @@
                                             <select name="colors[{{ $item->id }}]" class="mp-select"><option>Grijs</option><option>Zwart</option><option>Wit</option></select>
                                         </div>
                                         <div class="mp-form-group"><label class="mp-input-label">Materiaal</label>
-                                            <select name="materials[{{ $item->id }}]" class="mp-select"><option>FDM</option><option>Resin</option></select>
+                                            <select name="materials[{{ $item->id }}]" class="mp-select"><option>FDM</option></select>
                                         </div>
                                         <div class="mp-form-group"><label class="mp-input-label">Schaal</label>
                                             <select name="scales[{{ $item->id }}]" class="mp-select mp-scale-item-selector" data-id="{{ $item->id }}">
@@ -83,14 +83,21 @@
                     <h3 class="mp-summary-title">Overzicht</h3>
                     <div class="mp-summary-list">
                         @foreach($items as $item)
+                            @php $f = $item->stl_files[0] ?? ['x'=>0, 'y'=>0, 'z'=>0]; @endphp
                             <div class="mp-summary-item-wrapper"
                                  id="summary-item-{{ $item->id }}"
                                  data-base-price="{{ $item->price }}"
                                  data-base-volume="{{ $item->total_volume_mm3 ?? 0 }}"
-                                 data-qty="{{ $selection[$item->id]['quantity'] ?? 1 }}">
+                                 data-qty="{{ $selection[$item->id]['quantity'] ?? 1 }}"
+                                 data-x="{{ $f['x'] ?? 0 }}"
+                                 data-y="{{ $f['y'] ?? 0 }}"
+                                 data-z="{{ $f['z'] ?? 0 }}">
                                 <div class="mp-item-header">
                                     <span class="item-name"><strong>{{ $selection[$item->id]['quantity'] ?? 1 }}x</strong> {{ $item->title }}</span>
                                     <span class="item-price" id="price-display-{{ $item->id }}">€ 0,00</span>
+                                </div>
+                                <div class="mp-item-dims" id="dims-display-{{ $item->id }}" style="font-size: 11px; color: #706a64; font-weight: 600; margin-top: -3px; margin-bottom: 5px;">
+                                    Formaat: ...
                                 </div>
                             </div>
                             <hr class="mp-divider">
@@ -170,23 +177,28 @@
 
                 if (!itemWrapper) return;
 
+                // Dimensie berekening
+                const baseX = parseFloat(itemWrapper.dataset.x) / 10;
+                const baseY = parseFloat(itemWrapper.dataset.y) / 10;
+                const baseZ = parseFloat(itemWrapper.dataset.z) / 10;
+                document.getElementById('dims-display-' + itemId).textContent =
+                    `Formaat: ${(baseX * scaleFactor).toFixed(1)} x ${(baseY * scaleFactor).toFixed(1)} x ${(baseZ * scaleFactor).toFixed(1)} cm`;
+
+                // Prijs berekening
                 const basePrice = parseFloat(itemWrapper.dataset.basePrice);
                 const baseVolume = parseFloat(itemWrapper.dataset.baseVolume);
                 const qty = parseInt(itemWrapper.dataset.qty);
                 totalQty += qty;
 
-                // 1. Berekening zoals in je upload-form
                 const scaledVolumeMm3 = baseVolume * Math.pow(scaleFactor, 3);
                 const weightInGram = scaledVolumeMm3 * INFILL_FACTOR * PLA_DENSITY;
                 const materialCost = weightInGram * GRAM_PRICE;
                 let baseProfit = (weightInGram < 50) ? 3.50 : 4.00;
                 let calculatedPriceAtScale = Math.max(4.00, (materialCost * PROFIT_MULT) + baseProfit);
 
-                // 2. Bepaal referentie voor 100%
                 const refVolume = baseVolume * INFILL_FACTOR * PLA_DENSITY;
                 const refPrice = Math.max(4.00, ((refVolume * GRAM_PRICE) * PROFIT_MULT) + (refVolume < 50 ? 3.50 : 4.00));
 
-                // 3. Pas correctiefactor toe om database prijs aan te houden
                 const correctionFactor = basePrice / refPrice;
                 const finalPricePerUnit = calculatedPriceAtScale * correctionFactor;
                 const itemTotal = finalPricePerUnit * qty;

@@ -99,6 +99,19 @@
                             @endif
                         </div>
 
+                        @if(!empty($item->stl_files))
+                            <div class="mp-dimensions" style="margin: 10px 0; font-size: 11px; color: #888;">
+                                @php
+                                    // We nemen het eerste bestand voor de weergave
+                                    $f = $item->stl_files[0];
+                                    $x = number_format(($f['x'] ?? 0) / 10, 1);
+                                    $y = number_format(($f['y'] ?? 0) / 10, 1);
+                                    $z = number_format(($f['z'] ?? 0) / 10, 1);
+                                @endphp
+                                Formaat: b{{ $x }} x h{{ $y }} x d{{ $z }} cm
+                            </div>
+                        @endif
+
                         <p class="mp-item-desc">{{ Str::limit($item->description, 85) }}</p>
 
                         <div class="mp-item-footer">
@@ -133,9 +146,6 @@
                 <h2 id="multiModalTitle">Project Inspectie</h2>
             </div>
             <div id="multiModalViewer" class="mp-modal-body"></div>
-            <div class="mp-modal-footer">
-                <p><i class="fa-solid fa-cube"></i> <span id="currentFileName">Selecteer een onderdeel</span></p>
-            </div>
         </div>
         <div class="modal-files-sidebar">
             <h3 class="sidebar-title">Onderdelen (<span id="fileCountDisplay">0</span>)</h3>
@@ -288,12 +298,11 @@
             const btn = document.createElement('button');
             const fileName = file.path.split('/').pop();
             btn.className = `file-item-btn ${index === 0 ? 'active' : ''}`;
-            btn.innerHTML = `<i class="fa-solid fa-file-code"></i> Deel ${index + 1}`;
+            btn.innerHTML = `<i class="fa-solid fa-file-code"></i> Miniature ${index + 1}`;
             btn.onclick = (e) => {
                 e.stopPropagation();
                 document.querySelectorAll('.file-item-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
-                loadModelInModal(file.path, fileName);
             };
             listContainer.appendChild(btn);
         });
@@ -305,7 +314,7 @@
 
     function loadModelInModal(path, name) {
         const container = document.getElementById('multiModalViewer');
-        document.getElementById('currentFileName').innerText = name;
+
         initSTLViewer(container, `/storage/${path}`, false);
     }
 

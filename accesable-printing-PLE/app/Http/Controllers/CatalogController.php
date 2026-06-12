@@ -140,12 +140,12 @@ class CatalogController extends Controller
     {
         $selection = Session::get('print_selection', []);
 
+        // Bijwerken van de sessie uit het formulier (als de gebruiker vanaf de winkelwagen komt)
         if ($request->has('quantities')) {
             foreach ($request->quantities as $id => $qty) {
                 $selection[$id]['quantity'] = max(1, intval($qty));
             }
         }
-
         if ($request->has('scales')) {
             foreach ($request->scales as $id => $scale) {
                 if (isset($selection[$id])) {
@@ -153,14 +153,15 @@ class CatalogController extends Controller
                 }
             }
         }
-
         Session::put('print_selection', $selection);
+
         $items = CatalogItem::whereIn('id', array_keys($selection))->get();
 
         if ($items->isEmpty()) {
             return redirect()->route('catalog.index');
         }
 
+        // ZORG DAT DE PREVIEW DATA KLAAR STAAT
         foreach ($items as $item) {
             $totalVolume = 0;
             if (is_array($item->stl_files)) {
@@ -169,6 +170,10 @@ class CatalogController extends Controller
                 }
             }
             $item->total_volume_mm3 = $totalVolume;
+
+            // ZORG DAT DE HUIDIGE SCHAAL IN HET ITEM OBJECT ZIT
+            // Zo kan je Blade-template dit makkelijk uitlezen als $item->current_scale
+            $item->current_scale = $selection[$item->id]['scale'] ?? 100;
         }
 
         return view('catalog.checkout', compact('items', 'selection'));
@@ -176,13 +181,14 @@ class CatalogController extends Controller
 
     public function processCheckout(Request $request)
     {
+        // 1. Validatie
         $request->validate([
-            'title'        => 'required|string|max:255',
+            'title'        => 'required|string',
             'street'       => 'required|string',
             'streetnumber' => 'required|string',
             'zipcode'      => 'required|string',
             'city'         => 'required|string',
-            'total_price_hidden' => 'required|numeric'
+            'total_price_hidden' => 'required|numeric',
         ]);
 
         $selection = session('print_selection', []);
@@ -190,40 +196,55 @@ class CatalogController extends Controller
             return response()->json(['success' => false, 'message' => 'Winkelwagen leeg.'], 400);
         }
 
-        $stlFilesForDb = [];
-        $totalPrice = (float) $request->total_price_hidden;
-        $totalQuantity = 0;
+        $submittedScales = $request->input('scales', []);
+        $submittedColors = $request->input('colors', []);
+        $submittedMaterials = $request->input('materials', []);
 
+        $stlFilesForDb = [];
+
+        // 2. Loop door de selectie
         foreach ($selection as $itemId => $details) {
-            $totalQuantity += ($details['quantity'] ?? 1);
             $catalogItem = CatalogItem::find($itemId);
+
+            $scale = $submittedScales[$itemId] ?? $details['scale'] ?? 100;
+            $scaleFactor = $scale / 100; // Bijv: 150% = 1.5
 
             if ($catalogItem) {
                 foreach ($catalogItem->stl_files as $stl) {
-                    // HIER BEREKENEN WE DE CM WAARDEN VOOR DE DATABASE
+                    // Gebruik de ruwe basiswaarden uit de database voor de berekening
+                    $basisX = $stl['x'] ?? 0;
+                    $basisY = $stl['y'] ?? 0;
+                    $basisZ = $stl['z'] ?? 0;
+
                     $stlFilesForDb[] = [
-                        'title'         => $catalogItem->title,
-                        'path'          => $stl['path'],
-                        'scale'         => $details['scale'] ?? 100,
-                        'quantity'      => $details['quantity'] ?? 1,
-                        'price'         => $request->calculated_prices[$itemId] ?? 0,
-                        'from_catalog'  => true,
-                        // Opgeslagen als float voor makkelijke berekeningen in de toekomst
-                        'x_cm'          => ($stl['x'] ?? 0) / 10,
-                        'y_cm'          => ($stl['y'] ?? 0) / 10,
-                        'z_cm'          => ($stl['z'] ?? 0) / 10,
+                        'title'        => $catalogItem->title,
+                        'path'         => $stl['path'],
+                        'scale'        => (int)$scale,
+                        'quantity'     => (int)($details['quantity'] ?? 1),
+                        'price'        => (float)($request->calculated_prices[$itemId] ?? 0),
+                        'color'        => $submittedColors[$itemId] ?? 'Grijs',
+                        'material'     => $submittedMaterials[$itemId] ?? 'FDM',
+                        'from_catalog' => true,
+                        // Berekening: (Basiswaarde in mm * schaal) / 10 = cm
+                        'x_cm'         => ($basisX * $scaleFactor) / 10,
+                        'y_cm'         => ($basisY * $scaleFactor) / 10,
+                        'z_cm'         => ($basisZ * $scaleFactor) / 10,
                     ];
                 }
             }
         }
+
+        $firstItem = !empty($stlFilesForDb) ? $stlFilesForDb[0] : null;
 
         try {
             $order = PrintRequest::create([
                 'user_id'        => auth()->id(),
                 'title'          => $request->title,
                 'description'    => $request->description ?? 'Catalogus bestelling',
-                'total_price'    => $totalPrice,
+                'total_price'    => (float) $request->total_price_hidden,
                 'stl_files'      => $stlFilesForDb,
+                'color'          => $firstItem['color'] ?? 'Grijs',
+                'material'       => $firstItem['material'] ?? 'FDM',
                 'street'         => $request->street,
                 'streetnumber'   => $request->streetnumber,
                 'zipcode'        => $request->zipcode,
@@ -236,7 +257,11 @@ class CatalogController extends Controller
             $session = StripeSession::create([
                 'payment_method_types' => ['ideal', 'card'],
                 'line_items' => [[
-                    'price_data' => ['currency' => 'eur', 'product_data' => ['name' => "Print: " . $order->title], 'unit_amount' => (int)($totalPrice * 100)],
+                    'price_data' => [
+                        'currency' => 'eur',
+                        'product_data' => ['name' => "Print: " . $order->title],
+                        'unit_amount' => (int)($order->total_price * 100)
+                    ],
                     'quantity' => 1,
                 ]],
                 'mode' => 'payment',
@@ -250,7 +275,7 @@ class CatalogController extends Controller
 
             return response()->json(['success' => true, 'stripe_url' => $session->url]);
         } catch (\Exception $e) {
-            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+            return response()->json(['success' => false, 'message' => 'Fout: ' . $e->getMessage()], 500);
         }
     }
 }
