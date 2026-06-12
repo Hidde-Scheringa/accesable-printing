@@ -144,33 +144,28 @@
                                 @if(is_array($files))
                                     @foreach($files as $index => $file)
                                         @php
-                                            $scale = ($file['scale'] ?? 100) / 100;
                                             $qty = $file['quantity'] ?? 1;
+                                            $scale = ($file['scale'] ?? 100) / 100;
 
-                                            if (isset($file['h'])) {
-                                                $h_val = (float)$file['h'];
-                                                $b_val = (float)$file['b'];
-                                                $d_val = (float)$file['d'];
-                                            }
-                                            elseif (isset($file['dimensions'])) {
-                                                $h_val = (($file['dimensions']['z'] ?? 0) / 10) * $scale;
-                                                $b_val = (($file['dimensions']['x'] ?? 0) / 10) * $scale;
-                                                $d_val = (($file['dimensions']['y'] ?? 0) / 10) * $scale;
-                                            }
-                                            elseif (isset($file['x'])) {
-                                                $h_val = (($file['z'] ?? 0) / 10) * $scale;
-                                                $b_val = (($file['x'] ?? 0) / 10) * $scale;
-                                                $d_val = (($file['y'] ?? 0) / 10) * $scale;
-                                            }
-                                            else {
-                                                $h_val = $b_val = $d_val = '?';
+                                            // Bereken de waarden
+                                            if (isset($file['from_catalog']) && $file['from_catalog']) {
+                                                $b_val = $file['x_cm'] ?? (($file['x'] ?? 0) / 10 * $scale);
+                                                $h_val = $file['y_cm'] ?? (($file['y'] ?? 0) / 10 * $scale);
+                                                $d_val = $file['z_cm'] ?? (($file['z'] ?? 0) / 10 * $scale);
+                                            } else {
+                                                $b_val = (float)($file['b'] ?? 0);
+                                                $h_val = (float)($file['h'] ?? 0);
+                                                $d_val = (float)($file['d'] ?? 0);
                                             }
 
-                                            $h = is_numeric($h_val) ? number_format($h_val, 2, ',', '.') : $h_val;
-                                            $b = is_numeric($b_val) ? number_format($b_val, 2, ',', '.') : $b_val;
-                                            $d = is_numeric($d_val) ? number_format($d_val, 2, ',', '.') : $d_val;
-                                            $displayName = $file['title'] ?? $file['original_name'] ?? 'Model ' . ($index + 1);
+                                            // Formatteer de waarden voor weergave
+                                            $b = is_numeric($b_val) ? number_format($b_val, 2, ',', '.') : '?';
+                                            $h = is_numeric($h_val) ? number_format($h_val, 2, ',', '.') : '?';
+                                            $d = is_numeric($d_val) ? number_format($d_val, 2, ',', '.') : '?';
+
+                                            $displayName = $file['title'] ?? $file['original_name'] ?? ('Model ' . ($index + 1));
                                         @endphp
+
                                         <div style="font-size: 11px; margin-bottom: 5px; color: #555; border-bottom: 1px solid #f0f0f0; padding-bottom: 3px;">
                                             <div style="font-weight: bold; color: var(--p-dark);">
                                                 {{ \Illuminate\Support\Str::limit($displayName, 25) }}
