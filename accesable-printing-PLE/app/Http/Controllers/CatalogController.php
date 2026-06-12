@@ -19,10 +19,23 @@ class CatalogController extends Controller
      */
     public function index(Request $request)
     {
-        $items = CatalogItem::where('is_active', true)->paginate(9);
+        // 1. Begin de query
+        $query = CatalogItem::where('is_active', true);
+
+        // 2. Filteren op basis van de categorie in de URL (?category=...)
+        if ($request->has('category')) {
+            $category = $request->category; // bijv. 'animals'
+
+            // We matchen de waarde uit de URL met de database
+            // ucfirst zorgt dat 'animals' wordt gezocht als 'Animals'
+            $query->where('category', ucfirst($category));
+        }
+
+        // 3. Haal de resultaten op met paginering
+        $items = $query->paginate(9)->withQueryString();
+
         return view('catalog.index', compact('items'));
     }
-
     /**
      * Toon het formulier om een nieuw item toe te voegen (Admin)
      */

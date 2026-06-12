@@ -47,13 +47,13 @@
                 <a href="{{ route('catalog.index') }}" class="filter-btn {{ !request('category') ? 'active' : '' }}">
                     <i class="fa-solid fa-border-all"></i> Alle
                 </a>
-                <a href="{{ route('catalog.index', ['category' => 'animal']) }}" class="filter-btn {{ request('category') == 'animal' ? 'active' : '' }}">
+                <a href="{{ route('catalog.index', ['category' => 'Animals']) }}" class="filter-btn {{ request('category') == 'Animals' ? 'active' : '' }}">
                     <i class="fa-solid fa-paw"></i> Animals
                 </a>
-                <a href="{{ route('catalog.index', ['category' => 'monster']) }}" class="filter-btn {{ request('category') == 'monster' ? 'active' : '' }}">
+                <a href="{{ route('catalog.index', ['category' => 'Monsters']) }}" class="filter-btn {{ request('category') == 'Monsters' ? 'active' : '' }}">
                     <i class="fa-solid fa-dragon"></i> Monsters
                 </a>
-                <a href="{{ route('catalog.index', ['category' => 'warrior']) }}" class="filter-btn {{ request('category') == 'warrior' ? 'active' : '' }}">
+                <a href="{{ route('catalog.index', ['category' => 'Warriors']) }}" class="filter-btn {{ request('category') == 'Warriors' ? 'active' : '' }}">
                     <i class="fa-solid fa-shield-halved"></i> Warriors
                 </a>
             </div>
