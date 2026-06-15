@@ -57,6 +57,9 @@ Route::middleware(['auth', 'printer'])->group(function () {
     Route::post('/admin/dispute/{id}/approve', [PaymentController::class, 'adminApproveDispute'])->name('admin.dispute.approve');
     Route::post('/admin/dispute/{id}/reject', [PaymentController::class, 'adminRejectDispute'])->name('admin.dispute.reject');
     Route::post('/printer/request/{id}/update-status', [PrinterController::class, 'updateStatus'])->name('printer.update-status');
+    // Route voor het annuleren van een specifiek onderdeel
+    Route::post('/printer/cancel-part/{orderId}/{fileIndex}', [App\Http\Controllers\PrinterController::class, 'cancelPrintablePart'])
+        ->name('printer.cancel-part');
 });
 
 require __DIR__.'/auth.php';

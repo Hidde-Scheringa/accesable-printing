@@ -50,7 +50,7 @@
             </div>
 
             <div class="mp-filter-box" style="margin-top: 24px;">
-                <h3 class="mp-filter-header">2. STL Bestanden & Configuratie</h3>
+                <h3 class="mp-filter-header">2. STL Bestanden & Configuratie (max 150mb)</h3>
                 <div class="mp-upload-zone" onclick="document.getElementById('stl_input').click();">
                     <input type="file" name="stl_files[]" id="stl_input" class="mp-file-hidden" accept=".stl" multiple required>
                     <div class="upload-ui">

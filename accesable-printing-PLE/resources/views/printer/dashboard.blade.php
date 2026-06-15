@@ -92,10 +92,22 @@
                                 <div class="preview-btn-stack" style="display: flex; flex-direction: column; gap: 5px;">
                                     @foreach($files as $index => $file)
                                         @if(isset($file['path']))
-                                            <button class="mini-preview-btn" onclick="openStlModal('{{ asset('storage/' . $file['path']) }}', '{{ $file['title'] ?? $file['original_name'] ?? 'Model ' . ($index + 1) }}')">
-                                                <i class="fa-solid fa-eye"></i>
-                                                <span>{{ \Illuminate\Support\Str::limit($file['title'] ?? $file['original_name'] ?? 'Model ' . ($index + 1), 12) }}</span>
-                                            </button>
+                                            <div class="mini-preview-btn" style="margin-bottom: 5px; display: flex; justify-content: space-between; align-items: center;">
+
+                                                <button onclick="openStlModal('{{ asset('storage/' . $file['path']) }}', '{{ $file['title'] ?? 'Model' }}')"
+                                                        style="border: none; background: none; cursor: pointer; display: flex; align-items: center; gap: 5px;">
+                                                    <i class="fa-solid fa-eye" style="color: var(--p-gold);"></i>
+                                                    <span>{{ \Illuminate\Support\Str::limit($file['title'] ?? 'Model', 10) }}</span>
+                                                </button>
+
+                                                <form action="{{ route('printer.cancel-part', [$request->id, $index]) }}" method="POST"
+                                                      onsubmit="return confirm('LET OP: Dit onderdeel wordt geannuleerd en het geld wordt teruggestort aan de klant. Doorgaan?');">
+                                                    @csrf
+                                                    <button type="submit" title="Niet printbaar" style="background: none; border: none; color: #dc2626; cursor: pointer;">
+                                                        <i class="fa-solid fa-ban"></i>
+                                                    </button>
+                                                </form>
+                                            </div>
                                         @endif
                                     @endforeach
                                 </div>
