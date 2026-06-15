@@ -25,9 +25,11 @@
                     <a href="{{ route('requests.create') }}" class="mp-btn-action">
                         <span>+</span> Nieuw printverzoek
                     </a>
+                    <span hidden>
                     <a href="{{ route('catalog.create') }}" class="mp-btn-action" style="background: var(--mp-gold); color: #2d2a26;">
                         <span>+</span> Nieuw Catalogus Item
                     </a>
+                    </span hidden>
                 </div>
             </div>
         </div>
@@ -48,7 +50,7 @@
                 </div>
 
                 <div class="mp-filter-box" style="margin-top: 20px;">
-                    <h3 class="mp-filter-header">Status Filter</h3>
+                    <h3 class="mp-filter-header">Orders status</h3>
                     <div class="mp-filter-section">
                         <ul class="mp-link-list">
                             <li class="mp-link-item active">Alle aanvragen ({{ Auth::user()->requests->count() }})</li>
