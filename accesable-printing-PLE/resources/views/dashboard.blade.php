@@ -196,6 +196,17 @@
                                     <span class="mp-tag mp-tag-status">Productie: {{ strtoupper($request->status ?? 'In behandeling') }}</span>
                                 </div>
 
+                                @if(!empty($request->cancellation_details))
+                                    <div style="background-color: #fef2f2; border: 1px solid #fee2e2; padding: 12px; border-radius: 4px; margin-top: 15px;">
+                                        <h4 style="margin: 0 0 5px 0; color: #991b1b; font-size: 13px; display: flex; align-items: center; gap: 6px;">
+                                            <i class="fa-solid fa-circle-info"></i> Informatie over je refund
+                                        </h4>
+                                        <p style="margin: 0; font-size: 12px; color: #7f1d1d; white-space: pre-line; line-height: 1.4;">
+                                            {{ $request->cancellation_details }}
+                                        </p>
+                                    </div>
+                                @endif
+
                                 <div class="mp-item-footer" style="display: flex; justify-content: space-between; align-items: flex-end;">
                                     <div class="mp-download-container">
                                         @foreach($files as $index => $file)

@@ -111,23 +111,15 @@ class PrinterController extends Controller
             $itemToCancel = $files[$fileIndex];
             $isLastItem = (count($files) === 1);
 
-            // Bepaal de refund amount:
-            // Bij laatste item: alles (inclusief verzendkosten).
-            // Bij deel-annulering: alleen de prijs van het specifieke model.
-            if ($isLastItem) {
-                $refundAmount = $order->total_price; // Inclusief verzendkosten
-            } else {
-                $refundAmount = $itemToCancel['price']; // Alleen de mini
-            }
+            // Bepaal refund bedrag
+            $refundAmount = $isLastItem ? $order->total_price : $itemToCancel['price'];
 
             // 2. Stripe Refund uitvoeren
             \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
             $session = \Stripe\Checkout\Session::retrieve($order->stripe_checkout_id);
             $paymentIntentId = $session->payment_intent;
 
-            $refundData = [
-                'payment_intent' => $paymentIntentId,
-            ];
+            $refundData = ['payment_intent' => $paymentIntentId];
 
             // Alleen amount meesturen als het GEEN volledige refund is
             if (!$isLastItem) {
@@ -140,21 +132,26 @@ class PrinterController extends Controller
             unset($files[$fileIndex]);
             $newFiles = array_values($files);
 
+            // Informatie voor de klant opstellen
+            $details = "Hele/deel van de niet printbaar en geannuleerd. Geannuleerd onderdeel: " . ($itemToCancel['title'] ?? 'Model') .
+                " | Teruggestort: € " . number_format($refundAmount, 2, ',', '.');
+
+            $updateData = [
+                'stl_files' => $newFiles,
+                'total_price' => $order->total_price - $refundAmount,
+                'cancellation_details' => $order->cancellation_details ? $order->cancellation_details . "\n" . $details : $details
+            ];
+
+            // Status bijwerken bij volledige annulering
             if ($isLastItem) {
-                $order->update([
-                    'stl_files' => [],
-                    'total_price' => 0,
-                    'status' => 'cancelled',
-                    'payment_status' => 'refunded'
-                ]);
-            } else {
-                $order->update([
-                    'stl_files' => $newFiles,
-                    'total_price' => $order->total_price - $refundAmount
-                ]);
+                $updateData['status'] = 'cancelled';
+                $updateData['payment_status'] = 'refunded';
+                $updateData['total_price'] = 0;
             }
 
-            return redirect()->back()->with('success', 'Onderdeel geannuleerd. ' . ($isLastItem ? 'Volledige refund inclusief verzendkosten verwerkt.' : 'Deel-refund verwerkt.'));
+            $order->update($updateData);
+
+            return redirect()->back()->with('success', 'Onderdeel geannuleerd. ' . ($isLastItem ? 'Volledige refund verwerkt.' : 'Deel-refund verwerkt.'));
 
         } catch (\Exception $e) {
             return redirect()->back()->with('error', 'Refund mislukt: ' . $e->getMessage());
