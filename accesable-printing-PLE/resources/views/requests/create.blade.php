@@ -58,6 +58,14 @@
                         <span class="upload-text">Klik hier om bestanden te selecteren</span>
                     </div>
                 </div>
+                <div style="padding: 0 20px 20px 20px;">
+                    <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:5px; font-weight:bold; color:var(--mp-text-muted);">
+                        <span id="mb-text">0 MB / 150 MB gebruikt</span>
+                    </div>
+                    <div class="progress-bar-bg" style="height: 6px;">
+                        <div id="mb-progress-bar" class="progress-bar-fill" style="width: 0%; background: var(--mp-accent);"></div>
+                    </div>
+                </div>
                 <div id="stl-analysis-list" class="mp-analysis-stack"></div>
             </div>
 
@@ -179,6 +187,36 @@
         const files = e.target.files;
         if (!files.length) return;
 
+        // 1. Bereken totaal MB
+        let totalBytes = 0;
+        for (let i = 0; i < files.length; i++) {
+            totalBytes += files[i].size;
+        }
+        const totalMB = totalBytes / (1024 * 1024);
+
+        // 2. Controleer limiet (150MB)
+        if (totalMB > 150) {
+            // Reset de input zodat de bestanden niet worden meegestuurd
+            e.target.value = '';
+
+            // Update de balk naar rood en toon foutstatus in de UI
+            document.getElementById('mb-text').innerHTML = `<span style="color:#991b1b;">Fout: Totale grootte (${totalMB.toFixed(1)} MB) overschrijdt limiet van 150 MB. Selecteer kleinere bestanden.</span>`;
+            document.getElementById('mb-progress-bar').style.width = '100%';
+            document.getElementById('mb-progress-bar').style.backgroundColor = '#991b1b';
+
+            // Verberg de rest van de interface
+            document.getElementById('stl-analysis-list').innerHTML = '';
+            document.getElementById('section-summary').style.display = 'none';
+            return; // STOP HIER
+        }
+
+        // 3. Als we hier komen, is het onder de limiet: update balk
+        const percent = (totalMB / 150) * 100;
+        document.getElementById('mb-text').innerText = `${totalMB.toFixed(1)} MB / 150 MB gebruikt`;
+        document.getElementById('mb-progress-bar').style.width = percent + '%';
+        document.getElementById('mb-progress-bar').style.backgroundColor = 'var(--mp-accent)';
+
+        // 4. Analyseer de bestanden (Three.js)
         const listContainer = document.getElementById('stl-analysis-list');
         listContainer.innerHTML = '<div style="padding:20px; text-align:center; font-size:12px; color:var(--mp-gold);">BESTANDEN ANALYSEREN...</div>';
 
@@ -206,33 +244,33 @@
                 const card = document.createElement('div');
                 card.className = 'file-analysis-card';
                 card.innerHTML = `
-                    <div style="flex-grow: 1;">
-                        <span style="font-weight:700; color:var(--mp-text);">${file.name}</span>
-                        <span id="size-display-${i}" style="display:block; font-size:12px; color:var(--mp-text-muted);">Formaat: ...</span>
+                <div style="flex-grow: 1;">
+                    <span style="font-weight:700; color:var(--mp-text);">${file.name}</span>
+                    <span id="size-display-${i}" style="display:block; font-size:12px; color:var(--mp-text-muted);">Formaat: ...</span>
 
-                        <input type="hidden" name="heights[]" id="h-input-${i}">
-                        <input type="hidden" name="widths[]" id="w-input-${i}">
-                        <input type="hidden" name="depths[]" id="d-input-${i}">
-                        <input type="hidden" name="prices[]" id="p-input-${i}">
+                    <input type="hidden" name="heights[]" id="h-input-${i}">
+                    <input type="hidden" name="widths[]" id="w-input-${i}">
+                    <input type="hidden" name="depths[]" id="d-input-${i}">
+                    <input type="hidden" name="prices[]" id="p-input-${i}">
 
-                        <div style="display: flex; gap: 15px; margin-top:10px;">
-                            <div style="flex: 1;">
-                                <label class="mp-label-styled">Schaal</label>
-                                <select name="scales[]" class="scale-selector mp-select-styled" data-id="${i}" style="padding:5px; font-size:12px; height:35px;">
-                                    <option value="100" selected>1.0x (Origineel)</option>
-                                    <option value="125">1.25x</option>
-                                    <option value="150">1.50x</option>
-                                    <option value="200">2.0x</option>
-                                </select>
-                            </div>
-                            <div style="flex: 1;">
-                                <label class="mp-label-styled">Aantal</label>
-                                <input type="number" name="quantities[]" class="quantity-selector mp-input-styled" data-id="${i}" value="1" min="1" step="1" style="padding:5px; font-size:12px; height:35px;">
-                            </div>
+                    <div style="display: flex; gap: 15px; margin-top:10px;">
+                        <div style="flex: 1;">
+                            <label class="mp-label-styled">Schaal</label>
+                            <select name="scales[]" class="scale-selector mp-select-styled" data-id="${i}" style="padding:5px; font-size:12px; height:35px;">
+                                <option value="100" selected>1.0x (Origineel)</option>
+                                <option value="125">1.25x</option>
+                                <option value="150">1.50x</option>
+                                <option value="200">2.0x</option>
+                            </select>
+                        </div>
+                        <div style="flex: 1;">
+                            <label class="mp-label-styled">Aantal</label>
+                            <input type="number" name="quantities[]" class="quantity-selector mp-input-styled" data-id="${i}" value="1" min="1" step="1" style="padding:5px; font-size:12px; height:35px;">
                         </div>
                     </div>
-                    <div id="price-file-${i}" style="font-weight:900; color:var(--mp-accent); font-size:20px; min-width: 100px; text-align: right;">€ 0,00</div>
-                `;
+                </div>
+                <div id="price-file-${i}" style="font-weight:900; color:var(--mp-accent); font-size:20px; min-width: 100px; text-align: right;">€ 0,00</div>
+            `;
                 if(i === 0) listContainer.innerHTML = '';
                 listContainer.appendChild(card);
                 updateFileDetails(i);
