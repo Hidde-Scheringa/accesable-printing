@@ -10,69 +10,77 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
 /**
- * PaymentController beheert de gehele betaalcyclus en escrow-logica.
- * Het systeem volgt een flow: Pending -> Escrow (betaald) -> Paid (goedgekeurd).
+ * PaymentController manages the entire payment lifecycle and escrow logic.
+ * The system follows this flow: Pending -> Escrow (paid) -> Paid (approved/released).
  */
 class PaymentController extends Controller
 {
     /**
-     * Handelt de redirect af na een succesvolle Stripe checkout.
-     * Update de status naar 'escrow' om de order te beveiligen.
+     * Handle the redirect after a successful Stripe checkout.
+     * Updates the status to 'escrow' to secure the order funds.
+     * * @param int $id
+     * @return \Illuminate\Http\RedirectResponse
      */
     public function paymentSuccess($id)
     {
         $order = PrintRequest::findOrFail($id);
         if (auth()->id() !== $order->user_id) abort(403);
 
-        // Zodra de klant terugkeert, zetten we de order in escrow.
+        // Once the customer returns, we set the order to escrow.
         if ($order->payment_status === 'pending') {
             $order->update(['payment_status' => 'escrow']);
         }
 
-        return redirect()->route('dashboard')->with('success', 'Bedankt! Je betaling is succesvol verwerkt en staat veilig in escrow.');
+        return redirect()->route('dashboard')->with('success', 'Thank you! Your payment was successful and is now held securely in escrow.');
     }
 
     /**
-     * Verwerkt de annulering van een betaalsessie door de klant.
+     * Handle payment session cancellation by the customer.
+     * * @param int $id
+     * @return \Illuminate\Http\RedirectResponse
      */
     public function paymentCancel($id)
     {
         $order = PrintRequest::findOrFail($id);
         if (auth()->id() !== $order->user_id) abort(403);
 
-        return redirect()->route('dashboard')->with('error', 'De betaling is geannuleerd.');
+        return redirect()->route('dashboard')->with('error', 'The payment has been cancelled.');
     }
 
     /**
-     * Klant keurt de zending goed. Geld wordt vrijgegeven aan de printer.
+     * Customer approves the delivery. Funds are released to the printer.
+     * * @param int $id
+     * @return \Illuminate\Http\RedirectResponse
      */
     public function approveDelivery($id)
     {
         $order = PrintRequest::findOrFail($id);
         if (auth()->id() !== $order->user_id) abort(403);
 
-        // Alleen mogelijk als geld nog in escrow staat.
+        // Only possible if funds are currently held in escrow.
         if ($order->payment_status !== 'escrow') {
-            return back()->with('error', 'Deze actie is op dit moment niet mogelijk.');
+            return back()->with('error', 'This action is not available at this time.');
         }
 
         $order->update(['payment_status' => 'paid']);
-        return back()->with('success', 'Bedankt! Het geld is vrijgegeven aan de printer.');
+        return back()->with('success', 'Thank you! The funds have been released to the printer.');
     }
 
     /**
-     * Admin keurt een schadeclaim goed en voert een automatische refund uit.
+     * Admin approves a dispute claim and performs an automatic refund.
+     * * @param int $id
+     * @return \Illuminate\Http\RedirectResponse
      */
     public function adminApproveDispute($id)
     {
         $order = PrintRequest::findOrFail($id);
 
         if ($order->payment_status !== 'disputed') {
-            return back()->with('error', 'Deze order heeft geen openstaande schadeclaim.');
+            return back()->with('error', 'This order has no open dispute claim.');
         }
 
         if ($order->suggested_refund <= 0) {
-            return back()->with('error', 'Geen geldig refund bedrag gevonden.');
+            return back()->with('error', 'No valid refund amount found.');
         }
 
         try {
@@ -85,36 +93,40 @@ class PaymentController extends Controller
                 'reason'         => 'requested_by_customer',
             ]);
 
-            // HIER: Status naar 'refunded' zetten
+            // Update status to 'refunded'
             $order->update([
                 'payment_status' => 'refunded',
                 'suggested_refund' => 0
             ]);
 
-            return back()->with('success', 'Claim goedgekeurd geld is teruggestort.');
+            return back()->with('success', 'Claim approved and funds have been refunded.');
 
         } catch (\Exception $e) {
-            return back()->with('error', 'Fout bij Stripe: ' . $e->getMessage());
+            return back()->with('error', 'Stripe Error: ' . $e->getMessage());
         }
     }
 
     /**
-     * Admin wijst schadeclaim af; geld blijft bij de printer (status: paid).
+     * Admin rejects a dispute claim; funds remain with the printer (status: paid).
+     * * @param int $id
+     * @return \Illuminate\Http\RedirectResponse
      */
     public function adminRejectDispute($id)
     {
         $order = PrintRequest::findOrFail($id);
 
-        // HIER: Terug naar 'paid' omdat de claim is afgewezen en de printer het geld houdt
+        // Revert to 'paid' because the claim was rejected and the printer keeps the funds
         $order->update([
             'payment_status' => 'paid',
         ]);
 
-        return back()->with('success', 'Claim afgewezen: Betaling blijft behouden.');
+        return back()->with('success', 'Claim rejected: Payment remains with the printer.');
     }
 
     /**
-     * Laat de klant een order annuleren. Refund indien al in escrow.
+     * Allows the customer to cancel an order. Refunds if currently in escrow.
+     * * @param int $id
+     * @return \Illuminate\Http\RedirectResponse
      */
     public function customerCancel($id)
     {
@@ -125,10 +137,10 @@ class PaymentController extends Controller
         $allowedStatuses = ['pending', 'in_production'];
 
         if (!in_array($currentStatus, $allowedStatuses) || in_array($order->payment_status, ['paid', 'cancelled', 'disputed'])) {
-            return redirect()->back()->with('error', 'Annuleren is niet meer mogelijk.');
+            return redirect()->back()->with('error', 'Cancellation is no longer possible.');
         }
 
-        // Als er betaald is, moeten we het geld via Stripe terugstorten.
+        // If paid, refund via Stripe.
         if ($order->payment_status === 'escrow' && !empty($order->stripe_checkout_id)) {
             try {
                 Stripe::setApiKey(config('services.stripe.secret'));
@@ -137,17 +149,19 @@ class PaymentController extends Controller
                     \Stripe\Refund::create(['payment_intent' => $session->payment_intent, 'reason' => 'requested_by_customer']);
                 }
             } catch (\Exception $e) {
-                Log::error('Refund Mislukt: ' . $e->getMessage());
+                Log::error('Refund Failed: ' . $e->getMessage());
             }
         }
 
         $order->update(['payment_status' => 'cancelled', 'status' => 'cancelled']);
-        return redirect()->back()->with('success', 'Je printverzoek is geannuleerd en terugbetaald.');
+        return redirect()->back()->with('success', 'Your print request has been cancelled and refunded.');
     }
 
     /**
-     * Webhook luistert naar events vanuit Stripe (buiten de browser om).
-     * Zorgt ervoor dat status wordt bijgewerkt zodra betaling succesvol is.
+     * Stripe Webhook listener.
+     * Updates order status as soon as payment is confirmed.
+     * * @param Request $request
+     * @return \Illuminate\Http\JsonResponse|\Illuminate\Http\Response
      */
     public function handleWebhook(Request $request)
     {
@@ -162,7 +176,7 @@ class PaymentController extends Controller
         try {
             $event = Webhook::constructEvent($payload, $sig_header, config('services.stripe.webhook_secret'));
 
-            // Wanneer de betaling voltooid is, zet de status op 'escrow'.
+            // When payment is complete, set status to 'escrow'
             if ($event->type === 'checkout.session.completed') {
                 $session = $event->data->object;
                 $order = PrintRequest::find($session->metadata->order_id);
@@ -175,26 +189,28 @@ class PaymentController extends Controller
                 }
             }
         } catch (\Exception $e) {
-            Log::error('Stripe Webhook Fout: ' . $e->getMessage());
+            Log::error('Stripe Webhook Error: ' . $e->getMessage());
             return response()->json(['error' => 'Webhook Invalid'], 400);
         }
 
         return response()->json(['status' => 'success']);
     }
 
-    // In PaymentController.php
-
+    /**
+     * Submit a dispute claim for a specific order.
+     * * @param Request $request
+     * @param int $id
+     * @return \Illuminate\Http\RedirectResponse
+     */
     public function customerDispute(Request $request, $id)
     {
-        // ... validatie ...
-
         $order = PrintRequest::findOrFail($id);
         $files = is_array($order->stl_files) ? $order->stl_files : json_decode($order->stl_files, true);
 
-        // 1. Duidelijk declareren VOOR de loop
+        // 1. Initialize refund variable
         $suggestedRefund = 0;
 
-        // 2. Berekening
+        // 2. Calculation logic
         foreach ($request->items as $index => $itemName) {
             $defectQty = (int)($request->qtys[$index] ?? 0);
             $item = collect($files)->firstWhere('title', $itemName);
@@ -204,12 +220,11 @@ class PaymentController extends Controller
                 $batchQuantity = (int)($item['quantity'] ?? 1);
                 $pricePerPiece = $batchPrice / $batchQuantity;
 
-                // Variabele bijwerken
                 $suggestedRefund += ($defectQty * $pricePerPiece);
             }
         }
 
-        // 3. Afgerond en opgeslagen
+        // 3. Rounding and saving
         $suggestedRefund = round($suggestedRefund, 2);
 
         $paths = [];
@@ -219,24 +234,28 @@ class PaymentController extends Controller
             }
         }
 
-        // Hier wordt de variabele nu correct herkend
         $order->update([
             'payment_status'    => 'disputed',
-            'suggested_refund'  => $suggestedRefund, // Deze is nu gedefinieerd
+            'suggested_refund'  => $suggestedRefund,
             'defect_reason'     => $request->defect_reason,
-            'defect_image_path' => $paths // Je gebruikt nu casts in je Model, dus dit kan direct
+            'defect_image_path' => $paths
         ]);
 
-        return redirect()->back()->with('success', 'Claim ingediend voor €' . number_format($suggestedRefund, 2));
+        return redirect()->back()->with('success', 'Claim submitted for €' . number_format($suggestedRefund, 2));
     }
 
+    /**
+     * Resume a pending payment session.
+     * * @param int $id
+     * @return \Illuminate\Http\RedirectResponse
+     */
     public function resumePayment($id)
     {
         $order = \App\Models\Request::findOrFail($id);
         if (auth()->id() !== $order->user_id) abort(403);
 
         if ($order->payment_status !== 'pending') {
-            return redirect()->route('dashboard')->with('error', 'Deze bestelling kan niet meer betaald worden.');
+            return redirect()->route('dashboard')->with('error', 'This order can no longer be paid.');
         }
 
         \Stripe\Stripe::setApiKey(config('services.stripe.secret'));

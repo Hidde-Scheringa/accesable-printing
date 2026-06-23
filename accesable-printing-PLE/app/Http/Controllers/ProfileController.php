@@ -9,10 +9,15 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Redirect;
 use Illuminate\View\View;
 
+/**
+ * ProfileController manages user profile information, updates, and account deletion.
+ */
 class ProfileController extends Controller
 {
     /**
      * Display the user's profile form.
+     * * @param Request $request
+     * @return View
      */
     public function edit(Request $request): View
     {
@@ -23,11 +28,14 @@ class ProfileController extends Controller
 
     /**
      * Update the user's profile information.
+     * * @param ProfileUpdateRequest $request
+     * @return RedirectResponse
      */
     public function update(ProfileUpdateRequest $request): RedirectResponse
     {
         $request->user()->fill($request->validated());
 
+        // Reset email verification if the email address has changed
         if ($request->user()->isDirty('email')) {
             $request->user()->email_verified_at = null;
         }
@@ -39,9 +47,12 @@ class ProfileController extends Controller
 
     /**
      * Delete the user's account.
+     * * @param Request $request
+     * @return RedirectResponse
      */
     public function destroy(Request $request): RedirectResponse
     {
+        // Ensure the password is provided and correct before deletion
         $request->validateWithBag('userDeletion', [
             'password' => ['required', 'current_password'],
         ]);
@@ -52,6 +63,7 @@ class ProfileController extends Controller
 
         $user->delete();
 
+        // Invalidate session and regenerate CSRF token for security
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 

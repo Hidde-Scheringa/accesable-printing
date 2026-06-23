@@ -9,15 +9,29 @@ use Illuminate\Support\Facades\Auth;
 use Stripe\Stripe;
 use Stripe\Checkout\Session as StripeSession;
 
+/**
+ * RequestController handles the upload of custom 3D files and initiates
+ * the payment process through Stripe.
+ */
 class RequestController extends Controller
 {
+    /**
+     * Show the request form.
+     * * @return \Illuminate\View\View
+     */
     public function create()
     {
         return view('requests.create');
     }
 
+    /**
+     * Store a new custom 3D print request and create a Stripe checkout session.
+     * * @param HttpRequest $request
+     * @return \Illuminate\Http\JsonResponse
+     */
     public function store(HttpRequest $request)
     {
+        // 1. Validation
         $validated = $request->validate([
             'title'        => 'required|string|max:255',
             'material'     => 'required|string',
@@ -39,6 +53,7 @@ class RequestController extends Controller
 
         $fileData = [];
 
+        // 2. Process file uploads
         if ($request->hasFile('stl_files')) {
             foreach ($request->file('stl_files') as $index => $file) {
                 $path = $file->store('blueprints', 'public');
@@ -58,7 +73,7 @@ class RequestController extends Controller
         }
 
         try {
-            // 1. Project opslaan in de database
+            // 3. Save request to database
             $order = Auth::user()->requests()->create([
                 'title'          => $validated['title'],
                 'description'    => $request->description ?? '3D Print Project via upload',
@@ -71,10 +86,10 @@ class RequestController extends Controller
                 'zipcode'        => $validated['zipcode'],
                 'stl_files'      => $fileData,
                 'status'         => 'pending',
-                'payment_status' => 'unpaid' // Standaardwaarde bij aanmaak
+                'payment_status' => 'unpaid'
             ]);
 
-            // 2. Stripe Checkout Sessie genereren voor directe betaling
+            // 4. Generate Stripe Checkout session
             Stripe::setApiKey(config('services.stripe.secret'));
 
             $session = StripeSession::create([
@@ -84,9 +99,9 @@ class RequestController extends Controller
                         'currency' => 'eur',
                         'product_data' => [
                             'name' => "3D Print: " . $order->title,
-                            'description' => "Order #" . $order->id . " (Productietijd tot 2 weken)",
+                            'description' => "Order #" . $order->id . " (Production time up to 2 weeks)",
                         ],
-                        'unit_amount' => (int)($order->total_price * 100), // In centen
+                        'unit_amount' => (int)($order->total_price * 100),
                     ],
                     'quantity' => 1,
                 ]],
@@ -99,13 +114,12 @@ class RequestController extends Controller
                 'cancel_url' => route('payment.cancel', $order->id),
             ]);
 
-            // 3. Update de order met het gegenereerde Stripe Sessie ID
+            // 5. Update order with Stripe Session ID
             $order->update([
                 'stripe_checkout_id' => $session->id,
                 'payment_status'     => 'pending'
             ]);
 
-            // 4. Geef de Stripe URL terug aan de JavaScript (die stuurt de klant door)
             return response()->json([
                 'success'    => true,
                 'stripe_url' => $session->url
@@ -114,7 +128,7 @@ class RequestController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Fout bij verwerken van betalingsverzoek: ' . $e->getMessage()
+                'message' => 'Error processing payment request: ' . $e->getMessage()
             ], 500);
         }
     }

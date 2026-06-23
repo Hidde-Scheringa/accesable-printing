@@ -11,7 +11,9 @@ class Request extends Model
     use HasFactory;
 
     /**
-     * De attributen die massaal toewijsbaar zijn (Mass Assignment).
+     * The attributes that are mass assignable.
+     *
+     * @var array
      */
     protected $fillable = [
         'user_id',
@@ -29,16 +31,16 @@ class Request extends Model
         'status',
         'stripe_checkout_id',
         'payment_status',
-
-        // --- NIEUW: Deze stonden er nog niet in! ---
-        'defect_reason',       // Zorgt dat de reden mag worden opgeslagen
-        'defect_image_path',   // Zorgt dat het fotopad mag worden opgeslagen
+        'defect_reason',
+        'defect_image_path',
         'suggested_refund',
         'cancellation_details',
     ];
 
     /**
-     * De attributen die moeten worden omgezet naar specifieke types.
+     * The attributes that should be cast to native types.
+     *
+     * @var array
      */
     protected $casts = [
         'stl_files' => 'array',
@@ -49,7 +51,9 @@ class Request extends Model
     ];
 
     /**
-     * Relatie: Een aanvraag behoort tot één gebruiker.
+     * Get the user that owns the request.
+     *
+     * @return BelongsTo
      */
     public function user(): BelongsTo
     {
@@ -57,7 +61,9 @@ class Request extends Model
     }
 
     /**
-     * Helper methode: Is de order al betaald?
+     * Check if the order payment is completed.
+     *
+     * @return bool
      */
     public function isPaid(): bool
     {
@@ -65,7 +71,9 @@ class Request extends Model
     }
 
     /**
-     * Helper methode: Moet er nog betaald worden?
+     * Check if the order is awaiting payment.
+     *
+     * @return bool
      */
     public function isPendingPayment(): bool
     {

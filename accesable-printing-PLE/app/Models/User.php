@@ -23,7 +23,7 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
-        'role', // Vergeet niet 'role' hier toe te voegen voor veiligheid
+        'role',
     ];
 
     /**
@@ -50,7 +50,9 @@ class User extends Authenticatable
     }
 
     /**
-     * Relatie naar de print-aanvragen.
+     * Get all requests associated with the user.
+     *
+     * @return HasMany
      */
     public function requests(): HasMany
     {
@@ -58,8 +60,10 @@ class User extends Authenticatable
     }
 
     /**
-     * Check of de gebruiker de 'Printer' rol heeft.
-     * 0 = Klant, 1 = Printer
+     * Check if the user has the 'Printer' role.
+     * 0 = Customer, 1 = Printer
+     *
+     * @return bool
      */
     public function isPrinter(): bool
     {

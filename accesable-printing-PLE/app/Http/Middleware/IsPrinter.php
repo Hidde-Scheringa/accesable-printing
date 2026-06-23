@@ -11,12 +11,12 @@ class IsPrinter
 
     public function handle($request, \Closure $next)
     {
-        // Check of de gebruiker is ingelogd EN of hij de printer-rol (1) heeft
+        // check if the user is logged in and is he has a print expert role (1)
         if (auth()->check() && auth()->user()->isPrinter()) {
             return $next($request);
         }
 
-        // Zo niet? Stuur ze terug naar het dashboard met een melding
+        // if not then send them back to the user dashboard with a no acces
         return redirect('/dashboard')->with('error', 'No acces');
     }
 }

@@ -15,29 +15,34 @@ use Stripe\Checkout\Session as StripeSession;
 class CatalogController extends Controller
 {
     /**
-     * Toon de catalogus index pagina
+     * Display the catalog index page.
+     *
+     * @param Request $request
+     * @return \Illuminate\View\View
      */
     public function index(Request $request)
     {
-        // 1. Begin de query
+        // 1. Initialize the query
         $query = CatalogItem::where('is_active', true);
 
-        // 2. Filteren op basis van de categorie in de URL (?category=...)
+        // 2. Filter by category if provided in the URL (?category=...)
         if ($request->has('category')) {
-            $category = $request->category; // bijv. 'animals'
+            $category = $request->category;
 
-            // We matchen de waarde uit de URL met de database
-            // ucfirst zorgt dat 'animals' wordt gezocht als 'Animals'
+            // Matches the URL value with the database (e.g., 'animals' -> 'Animals')
             $query->where('category', ucfirst($category));
         }
 
-        // 3. Haal de resultaten op met paginering
+        // 3. Retrieve results with pagination
         $items = $query->paginate(9)->withQueryString();
 
         return view('catalog.index', compact('items'));
     }
+
     /**
-     * Toon het formulier om een nieuw item toe te voegen (Admin)
+     * Show the form to add a new item (Admin).
+     *
+     * @return \Illuminate\View\View
      */
     public function create()
     {
@@ -45,11 +50,14 @@ class CatalogController extends Controller
     }
 
     /**
-     * Sla een nieuw catalogus item op inclusief STL analyse data
+     * Store a new catalog item including STL analysis data.
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
      */
     public function store(Request $request)
     {
-        // 1. Validatie
+        // 1. Validation
         $request->validate([
             'title' => 'required|string|max:255',
             'files' => 'required',
@@ -59,7 +67,7 @@ class CatalogController extends Controller
 
         $storedFiles = [];
 
-        // 2. Bestanden verwerken en opslaan
+        // 2. Process and store files
         if ($request->hasFile('files')) {
             foreach ($request->file('files') as $key => $file) {
                 $path = $file->store('catalog_stls', 'public');
@@ -75,7 +83,7 @@ class CatalogController extends Controller
             }
         }
 
-        // 3. Aanmaken in database
+        // 3. Create record in database
         try {
             CatalogItem::create([
                 'title'       => $request->title,
@@ -89,19 +97,23 @@ class CatalogController extends Controller
             return response()->json([
                 'success' => true,
                 'redirect' => route('catalog.index'),
-                'message' => 'Model succesvol toegevoegd aan de catalogus!'
+                'message' => 'Model successfully added to the catalog!'
             ]);
 
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'error' => 'Fout bij opslaan: ' . $e->getMessage()
+                'error' => 'Storage error: ' . $e->getMessage()
             ], 500);
         }
     }
 
     /**
-     * Voeg een item toe aan de tijdelijke selectie (sessie)
+     * Add an item to the temporary session selection.
+     *
+     * @param Request $request
+     * @param int $id
+     * @return \Illuminate\Http\RedirectResponse
      */
     public function addToSelection(Request $request, $id)
     {
@@ -113,11 +125,14 @@ class CatalogController extends Controller
         ];
 
         Session::put('print_selection', $selection);
-        return redirect()->back()->with('success', 'Item toegevoegd aan selectie.');
+        return redirect()->back()->with('success', 'Item added to selection.');
     }
 
     /**
-     * Verwijder een item uit de selectie
+     * Remove an item from the selection.
+     *
+     * @param int $id
+     * @return \Illuminate\Http\RedirectResponse
      */
     public function removeFromSelection($id)
     {
@@ -128,7 +143,9 @@ class CatalogController extends Controller
     }
 
     /**
-     * Leeg de gehele selectie
+     * Clear the entire selection.
+     *
+     * @return \Illuminate\Http\RedirectResponse
      */
     public function clearSelection()
     {
@@ -137,7 +154,9 @@ class CatalogController extends Controller
     }
 
     /**
-     * Toon de selectie (winkelwagen) pagina
+     * Display the selection (cart) page.
+     *
+     * @return \Illuminate\View\View
      */
     public function selection()
     {
@@ -147,13 +166,16 @@ class CatalogController extends Controller
     }
 
     /**
-     * Ga naar de checkout pagina
+     * Navigate to the checkout page.
+     *
+     * @param Request $request
+     * @return \Illuminate\View\View|\Illuminate\Http\RedirectResponse
      */
     public function checkout(Request $request)
     {
         $selection = Session::get('print_selection', []);
 
-        // Bijwerken van de sessie uit het formulier (als de gebruiker vanaf de winkelwagen komt)
+        // Update session from form (if coming from cart)
         if ($request->has('quantities')) {
             foreach ($request->quantities as $id => $qty) {
                 $selection[$id]['quantity'] = max(1, intval($qty));
@@ -174,7 +196,7 @@ class CatalogController extends Controller
             return redirect()->route('catalog.index');
         }
 
-        // ZORG DAT DE PREVIEW DATA KLAAR STAAT
+        // Prepare preview data
         foreach ($items as $item) {
             $totalVolume = 0;
             if (is_array($item->stl_files)) {
@@ -183,18 +205,21 @@ class CatalogController extends Controller
                 }
             }
             $item->total_volume_mm3 = $totalVolume;
-
-            // ZORG DAT DE HUIDIGE SCHAAL IN HET ITEM OBJECT ZIT
-            // Zo kan je Blade-template dit makkelijk uitlezen als $item->current_scale
             $item->current_scale = $selection[$item->id]['scale'] ?? 100;
         }
 
         return view('catalog.checkout', compact('items', 'selection'));
     }
 
+    /**
+     * Process the checkout and initiate Stripe payment.
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
     public function processCheckout(Request $request)
     {
-        // 1. Validatie
+        // 1. Validation
         $request->validate([
             'title'        => 'required|string',
             'street'       => 'required|string',
@@ -206,7 +231,7 @@ class CatalogController extends Controller
 
         $selection = session('print_selection', []);
         if (empty($selection)) {
-            return response()->json(['success' => false, 'message' => 'Winkelwagen leeg.'], 400);
+            return response()->json(['success' => false, 'message' => 'Cart is empty.'], 400);
         }
 
         $submittedScales = $request->input('scales', []);
@@ -215,16 +240,15 @@ class CatalogController extends Controller
 
         $stlFilesForDb = [];
 
-        // 2. Loop door de selectie
+        // 2. Loop through selection
         foreach ($selection as $itemId => $details) {
             $catalogItem = CatalogItem::find($itemId);
 
             $scale = $submittedScales[$itemId] ?? $details['scale'] ?? 100;
-            $scaleFactor = $scale / 100; // Bijv: 150% = 1.5
+            $scaleFactor = $scale / 100;
 
             if ($catalogItem) {
                 foreach ($catalogItem->stl_files as $stl) {
-                    // Gebruik de ruwe basiswaarden uit de database voor de berekening
                     $basisX = $stl['x'] ?? 0;
                     $basisY = $stl['y'] ?? 0;
                     $basisZ = $stl['z'] ?? 0;
@@ -235,10 +259,10 @@ class CatalogController extends Controller
                         'scale'        => (int)$scale,
                         'quantity'     => (int)($details['quantity'] ?? 1),
                         'price'        => (float)($request->calculated_prices[$itemId] ?? 0),
-                        'color'        => $submittedColors[$itemId] ?? 'Grijs',
+                        'color'        => $submittedColors[$itemId] ?? 'Gray',
                         'material'     => $submittedMaterials[$itemId] ?? 'FDM',
                         'from_catalog' => true,
-                        // Berekening: (Basiswaarde in mm * schaal) / 10 = cm
+                        // Conversion: (Base value in mm * scale) / 10 = cm
                         'x_cm'         => ($basisX * $scaleFactor) / 10,
                         'y_cm'         => ($basisY * $scaleFactor) / 10,
                         'z_cm'         => ($basisZ * $scaleFactor) / 10,
@@ -253,10 +277,10 @@ class CatalogController extends Controller
             $order = PrintRequest::create([
                 'user_id'        => auth()->id(),
                 'title'          => $request->title,
-                'description'    => $request->description ?? 'Catalogus bestelling',
+                'description'    => $request->description ?? 'Catalog order',
                 'total_price'    => (float) $request->total_price_hidden,
                 'stl_files'      => $stlFilesForDb,
-                'color'          => $firstItem['color'] ?? 'Grijs',
+                'color'          => $firstItem['color'] ?? 'Gray',
                 'material'       => $firstItem['material'] ?? 'FDM',
                 'street'         => $request->street,
                 'streetnumber'   => $request->streetnumber,
@@ -288,7 +312,7 @@ class CatalogController extends Controller
 
             return response()->json(['success' => true, 'stripe_url' => $session->url]);
         } catch (\Exception $e) {
-            return response()->json(['success' => false, 'message' => 'Fout: ' . $e->getMessage()], 500);
+            return response()->json(['success' => false, 'message' => 'Error: ' . $e->getMessage()], 500);
         }
     }
 }

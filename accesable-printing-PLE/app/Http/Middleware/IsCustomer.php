@@ -15,12 +15,12 @@ class IsCustomer
      */
     public function handle(Request $request, Closure $next)
     {
-        // Als je ingelogd bent en GEEN printer bent, mag je door
+        // if you are logged in and no print expert you can proceed
         if (auth()->check() && !auth()->user()->isPrinter()) {
             return $next($request);
         }
 
-        // Ben je wel een printer? Dan word je naar jouw eigen dashboard gestuurd
+        // are you a print expert then you are redirected to your own erea
         return redirect()->route('printer.dashboard');
     }
 }

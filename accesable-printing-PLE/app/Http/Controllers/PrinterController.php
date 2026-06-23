@@ -6,17 +6,22 @@ use App\Models\Request as PrintRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
+/**
+ * PrinterController manages the internal dashboard, production status updates,
+ * and dispute handling for the service provider.
+ */
 class PrinterController extends Controller
 {
     /**
-     * Toon het dashboard voor de printer.
+     * Display the printer dashboard.
+     * * @return \Illuminate\View\View
      */
     public function index()
     {
-        // 1. Alle aanvragen voor de stats (inclusief pending)
+        // 1. All requests for statistics (including pending)
         $statsRequests = PrintRequest::all();
 
-        // 2. Gefilterde aanvragen voor de tabel (ZONDER 'pending' orders)
+        // 2. Filtered requests for the table (excluding 'pending' orders)
         $allRequests = PrintRequest::with('user')
             ->where('payment_status', '!=', 'pending')
             ->latest()
@@ -26,7 +31,10 @@ class PrinterController extends Controller
     }
 
     /**
-     * Update de productiestatus vanuit het Admin Dashboard.
+     * Update production status from the Admin Dashboard.
+     * * @param Request $request
+     * @param int $id
+     * @return \Illuminate\Http\RedirectResponse
      */
     public function updateStatus(Request $request, $id)
     {
@@ -36,67 +44,79 @@ class PrinterController extends Controller
 
         $order = PrintRequest::findOrFail($id);
 
-        // Update de status naar 'printing' of 'shipped'
+        // Update status to 'printing' or 'shipped'
         $order->update([
             'status' => $request->status
         ]);
 
-        return redirect()->back()->with('success', 'De productiestatus is succesvol bijgewerkt naar ' . strtoupper($request->status) . '.');
+        return redirect()->back()->with('success', 'Production status successfully updated to ' . strtoupper($request->status) . '.');
     }
 
     /**
-     * Klant annuleert de order (Alleen toegestaan bij 'pending' of 'in_production')
+     * Customer cancels the order (Only allowed if status is 'pending' or 'in_production').
+     * * @param int $id
+     * @return \Illuminate\Http\RedirectResponse
      */
     public function customerCancel($id)
     {
         $order = PrintRequest::findOrFail($id);
 
-        // Extra backend beveiliging: Check de huidige status
+        // Backend validation: Check current status
         $currentStatus = strtolower($order->status ?? 'pending');
         $allowedStatuses = ['pending', 'in_production'];
 
         if (!in_array($currentStatus, $allowedStatuses)) {
-            return redirect()->back()->with('error', 'Annuleren is helaas niet meer mogelijk omdat de printers al draaien of de bestelling is verzonden.');
+            return redirect()->back()->with('error', 'Cancellation is no longer possible as production has started or the order has shipped.');
         }
 
-        // Update de status naar geannuleerd
+        // Update status to cancelled
         $order->update([
             'payment_status' => 'cancelled',
             'status' => 'cancelled'
         ]);
 
-        return redirect()->back()->with('success', 'Je printverzoek is succesvol geannuleerd.');
+        return redirect()->back()->with('success', 'Your print request has been successfully cancelled.');
     }
 
     /**
-     * Klant meldt een defect / vraagt geld terug (Alleen bij status 'shipped')
+     * Customer reports a defect / requests a refund (Only valid if status is 'shipped').
+     * * @param Request $request
+     * @param int $id
+     * @return \Illuminate\Http\RedirectResponse
      */
     public function customerDispute(Request $request, $id)
     {
         $request->validate([
             'defect_reason' => 'required|string|max:1000',
-            'defect_image' => 'required|image|mimes:jpeg,png,jpg,webp|max:5120', // max 5MB
+            'defect_image' => 'required|image|mimes:jpeg,png,jpg,webp|max:5120', // Max 5MB
         ]);
 
         $order = PrintRequest::findOrFail($id);
 
-        // Sla de afbeelding op in de public storage onder de map 'defects'
+        // Store image in public storage 'defects' folder
         if ($request->hasFile('defect_image')) {
             $path = $request->file('defect_image')->store('defects', 'public');
 
-            // Sla de reden en het bestandspad op in de database
+            // Save reason and file path to database
             $order->update([
                 'payment_status' => 'disputed',
                 'defect_reason' => $request->defect_reason,
                 'defect_image_path' => $path
             ]);
 
-            return redirect()->back()->with('success', 'Je terugbetalingsaanvraag en schadefoto zijn succesvol ingediend. We nemen zo snel mogelijk contact met je op.');
+            return redirect()->back()->with('success', 'Your refund request and photo evidence have been submitted. We will contact you shortly.');
         }
 
-        return redirect()->back()->with('error', 'Er is iets misgegaan bij het uploaden van de foto.');
+        return redirect()->back()->with('error', 'Something went wrong while uploading the photo.');
     }
 
+    /**
+     * Cancel a specific part within an order.
+     * * @param Request $request
+     * @param int $orderId
+     * @param int $fileIndex
+     * @return \Illuminate\Http\RedirectResponse
+     */
     public function cancelPrintablePart(Request $request, $orderId, $fileIndex)
     {
         try {
@@ -104,37 +124,35 @@ class PrinterController extends Controller
             $files = $order->stl_files;
 
             if (!isset($files[$fileIndex])) {
-                return redirect()->back()->with('error', 'Onderdeel niet gevonden.');
+                return redirect()->back()->with('error', 'Part not found.');
             }
 
-            // 1. Berekening voorbereiden
+            // 1. Prepare refund calculation
             $itemToCancel = $files[$fileIndex];
             $isLastItem = (count($files) === 1);
 
-            // Bepaal refund bedrag
             $refundAmount = $isLastItem ? $order->total_price : $itemToCancel['price'];
 
-            // 2. Stripe Refund uitvoeren
+            // 2. Execute Stripe Refund
             \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
             $session = \Stripe\Checkout\Session::retrieve($order->stripe_checkout_id);
             $paymentIntentId = $session->payment_intent;
 
             $refundData = ['payment_intent' => $paymentIntentId];
 
-            // Alleen amount meesturen als het GEEN volledige refund is
+            // Only specify amount if it's a partial refund
             if (!$isLastItem) {
                 $refundData['amount'] = (int)($refundAmount * 100);
             }
 
             \Stripe\Refund::create($refundData);
 
-            // 3. Database bijwerken
+            // 3. Update Database
             unset($files[$fileIndex]);
             $newFiles = array_values($files);
 
-            // Informatie voor de klant opstellen
-            $details = "Hele/deel van de niet printbaar en geannuleerd. Geannuleerd onderdeel: " . ($itemToCancel['title'] ?? 'Model') .
-                " | Teruggestort: € " . number_format($refundAmount, 2, ',', '.');
+            $details = "Item partially/fully unprintable and cancelled. Cancelled part: " . ($itemToCancel['title'] ?? 'Model') .
+                " | Refunded: € " . number_format($refundAmount, 2, ',', '.');
 
             $updateData = [
                 'stl_files' => $newFiles,
@@ -142,7 +160,7 @@ class PrinterController extends Controller
                 'cancellation_details' => $order->cancellation_details ? $order->cancellation_details . "\n" . $details : $details
             ];
 
-            // Status bijwerken bij volledige annulering
+            // Update status if last item is cancelled
             if ($isLastItem) {
                 $updateData['status'] = 'cancelled';
                 $updateData['payment_status'] = 'refunded';
@@ -151,10 +169,10 @@ class PrinterController extends Controller
 
             $order->update($updateData);
 
-            return redirect()->back()->with('success', 'Onderdeel geannuleerd. ' . ($isLastItem ? 'Volledige refund verwerkt.' : 'Deel-refund verwerkt.'));
+            return redirect()->back()->with('success', 'Part cancelled. ' . ($isLastItem ? 'Full refund processed.' : 'Partial refund processed.'));
 
         } catch (\Exception $e) {
-            return redirect()->back()->with('error', 'Refund mislukt: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Refund failed: ' . $e->getMessage());
         }
     }
 }

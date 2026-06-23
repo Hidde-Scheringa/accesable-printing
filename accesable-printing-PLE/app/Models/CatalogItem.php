@@ -7,7 +7,11 @@ use Illuminate\Support\Str;
 
 class CatalogItem extends Model
 {
-    // Velden die via een formulier gevuld mogen worden
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var array
+     */
     protected $fillable = [
         'title',
         'slug',
@@ -19,16 +23,22 @@ class CatalogItem extends Model
         'is_featured'
     ];
 
-    // Zorgt dat data types correct worden omgezet
+    /**
+     * The attributes that should be cast to native types.
+     *
+     * @var array
+     */
     protected $casts = [
-        'stl_files' => 'array',    // Belangrijk: zet JSON om naar een PHP array
+        'stl_files' => 'array',    // Automatically converts JSON data to a PHP array
         'price' => 'decimal:2',
         'is_active' => 'boolean',
         'is_featured' => 'boolean',
     ];
 
     /**
-     * Optioneel: Genereer de slug automatisch op basis van de titel
+     * Boot the model.
+     *
+     * Automatically generates a URL slug from the title if one is not provided.
      */
     protected static function boot()
     {

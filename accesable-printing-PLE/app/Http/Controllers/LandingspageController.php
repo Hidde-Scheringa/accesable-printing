@@ -9,7 +9,7 @@ class LandingspageController extends Controller
 {
     public function index()
     {
-        // We halen de 5 nieuwste verzoeken op die een STL-bestand hebben
+        // collect the 5 newest requests that have a stl file
         $recentRequests = Request::whereNotNull('stl_files')
             ->latest()
             ->take(5)
