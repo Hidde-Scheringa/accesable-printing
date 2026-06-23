@@ -108,6 +108,12 @@
                 <h3>3. Gegevensbescherming</h3>
                 <p>Wij verplichten ons om digitale bestanden na verzending van de fysieke print direct en permanent te verwijderen. Uw data wordt nooit gedeeld met derden.</p>
             </div>
+
+            <div class="mp-terms-section">
+                <h3>4. levering en fdm toleranties</h3>
+                <p>Omdat we on demand werken kan het een paar weken duren voordat de miniature verzonden en ontvagen is. dit hangt af van de order en drukte.
+                Omdat wij met FDM (fillament) werken betekent dit dat de miniatures soms printrandjes hebben, dit is gebruikelijk bij fdm en kan geschuurd worden. Wij zien dit niet als gebreken.</p>
+            </div>
         </div>
         <div class="mp-modal-footer">
             <button type="button" class="mp-btn-submit" id="closeTermsBtn" style="padding: 10px 25px; font-size: 13px;">Ik begrijp het</button>
