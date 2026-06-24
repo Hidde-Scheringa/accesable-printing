@@ -50,6 +50,7 @@
                     <p class="mp-intro-text">
                         Laat je <strong>Dungeons and Dragons</strong> miniatures wensen werkelijkheid worden.
                         <strong>Accessible Printing</strong> brengt jouw campaigns naar het volgende niveau door miniatures en gebouwen tot leven te wekken.
+                        We printen op jouw aanvraag! Of het nou een catalog mini is of je eigen creatie we printen het met plezier voor je uit.
                     </p>
                     <p class="mp-intro-text">
                         Lever je eigen models aan of kies een prachtig ontwerp uit onze groeiende <strong>catalogus</strong>.
